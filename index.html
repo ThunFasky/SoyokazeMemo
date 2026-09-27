@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>SoyokazeMemo</title>
+  </head>
+  <body>
+    <header class="toolbar" role="toolbar" aria-label="ツールバー">
+      <div class="group" role="group" aria-label="ツール">
+        <button class="icon-btn" data-tool="pen" aria-pressed="true" title="ペン (P)">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 20l1.2-4.4L15.8 5a2.1 2.1 0 0 1 3 3L8.2 18.6z" />
+            <path d="M13.8 7l3 3" />
+          </svg>
+          <span class="sr-only">ペン</span>
+        </button>
+        <button class="icon-btn" data-tool="eraser" aria-pressed="false" title="消しゴム (E)">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 20l-4.6-4.6a1.6 1.6 0 0 1 0-2.2l8.8-8.8a1.6 1.6 0 0 1 2.2 0l5.2 5.2a1.6 1.6 0 0 1 0 2.2L12.4 20" />
+            <path d="M9 20h11" />
+            <path d="M8 10l6.6 6.6" />
+          </svg>
+          <span class="sr-only">消しゴム</span>
+        </button>
+      </div>
+
+      <div class="group size-group" title="太さ ( [ / ] )">
+        <span class="size-preview" aria-hidden="true"><span id="size-dot"></span></span>
+        <input id="size" type="range" min="1" max="80" step="1" value="4" aria-label="太さ" />
+        <output id="size-value" for="size">4</output>
+      </div>
+
+      <div class="group palette" id="palette" role="group" aria-label="カラーパレット"></div>
+
+      <div class="group" role="group" aria-label="履歴">
+        <button class="icon-btn" id="undo" title="元に戻す (Ctrl+Z)" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 14L4 9l5-5" />
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+          </svg>
+          <span class="sr-only">元に戻す</span>
+        </button>
+        <button class="icon-btn" id="redo" title="やり直す (Ctrl+Y)" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 14l5-5-5-5" />
+            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+          </svg>
+          <span class="sr-only">やり直す</span>
+        </button>
+        <button class="icon-btn" id="clear" title="すべて消去（Ctrl+Z で戻せます）" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16" />
+            <path d="M10 11v6M14 11v6" />
+            <path d="M6 7l1 13h10l1-13" />
+            <path d="M9 7V4h6v3" />
+          </svg>
+          <span class="sr-only">すべて消去</span>
+        </button>
+      </div>
+
+      <div class="spacer"></div>
+
+      <button class="primary-btn" id="copy" title="キャンバスを PNG でクリップボードにコピー (Ctrl+C)">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="8" y="3" width="8" height="4" rx="1" />
+          <path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" />
+          <path d="M8 16l2.5-3 2 2 1.5-1.5L16 16" />
+        </svg>
+        <span>画像をコピー</span>
+      </button>
+    </header>
+
+    <main class="stage" id="stage">
+      <canvas id="ink"></canvas>
+      <canvas id="overlay"></canvas>
+
+      <p class="empty-hint" id="empty-hint">
+        描いて <kbd>Ctrl</kbd>+<kbd>C</kbd> でコピー ／ <kbd>Ctrl</kbd>+<kbd>V</kbd> で画像を貼り付け
+      </p>
+
+      <div class="float-hint" id="float-hint" hidden>
+        <span>ドラッグで移動</span>
+        <span>角で拡大縮小（<kbd>Shift</kbd> 比率フリー）</span>
+        <span>◯ で回転（<kbd>Shift</kbd> 15°刻み）</span>
+        <span><kbd>Enter</kbd> / 外側クリックで確定</span>
+        <span><kbd>Esc</kbd> で取消</span>
+      </div>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
