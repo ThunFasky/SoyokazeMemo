@@ -1,10 +1,12 @@
 # Windows 用インストーラー（NSIS の .exe と WiX の .msi）をビルドして Artifacts に置く。
 # Actions タブ → 該当の実行 → Artifacts から .exe / .msi をそのままダウンロードできる。
-# 配布用の正式版は release.yml（タグ push で GitHub Releases に添付）を使う。
+# 配布用の正式版は release.yml（リリースを Publish すると GitHub Releases に添付）を使う。
 name: Windows installer
 
 on:
   push:
+    # タグの push では動かさない（リリース用のビルドは release.yml が担当）
+    branches: ["**"]
     paths:
       - "src/**"
       - "src-tauri/**"

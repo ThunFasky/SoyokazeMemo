@@ -1,32 +1,49 @@
-# v から始まるタグ（例: v0.1.0）を push すると、Windows インストーラーをビルドして
-# GitHub Releases に添付する。配布先の人は Releases から -setup.exe を落としてダブルクリックするだけ。
+# GitHub Releases にインストーラー（-setup.exe / .msi）を添付する。
 #
-# タグの付け方（どちらでも OK）
-#   - GitHub の Releases → "Draft a new release" → タグ欄に v0.1.0 と入力して Publish
-#   - git tag v0.1.0 && git push origin v0.1.0
+# 動くタイミング
+#   - Releases 画面で "Draft a new release" → Publish したとき（タグ名は自由: v0.1.0, Beta など）
+#   - Actions タブ → Release → "Run workflow" でタグ名を指定したとき
+#     （既にあるリリースに後から添付し直したいとき用。リリースが無ければ作る）
+#
+# v1.2.3 形式のタグの場合だけ、tauri.conf.json の version と一致しているかチェックする。
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "添付先のリリースのタグ名（例: v0.1.0, Beta）"
+        required: true
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
   release:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
 
-      - name: Check tag matches app version
+      - name: Check version (only for v1.2.3 style tags)
         shell: bash
         run: |
           version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
-            echo "::error::タグ ${GITHUB_REF_NAME} と tauri.conf.json の version (${version}) が一致しません"
+          if [[ "$TAG" =~ ^v[0-9] ]] && [ "$TAG" != "v${version}" ]; then
+            echo "::error::タグ ${TAG} と tauri.conf.json の version (${version}) が一致しません"
             exit 1
           fi
+          echo "tag=${TAG} / app version=${version}"
 
       - uses: actions/setup-node@v7
         with:
@@ -49,11 +66,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           files=(src-tauri/target/release/bundle/nsis/*-setup.exe src-tauri/target/release/bundle/msi/*.msi)
-          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            # Releases 画面から作った場合はリリースが既にあるので、ファイルだけ追加する
-            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${files[@]}" \
-              --title "SoyokazeMemo ${GITHUB_REF_NAME}" \
-              --generate-notes
+            gh release create "$TAG" "${files[@]}" --title "SoyokazeMemo ${TAG}" --generate-notes
           fi
