@@ -125,14 +125,15 @@ npm run tauri build
 
 ## リリース（配布）の手順
 
-`v` から始まるタグを作ると、**Release** ワークフローがインストーラーをビルドして GitHub Releases に添付します。
+GitHub でリリースを **Publish** すると、**Release** ワークフローがインストーラーをビルドしてそのリリースに添付します。
 
-1. `src-tauri/tauri.conf.json` と `package.json` の `version` を上げて `main` にマージ
-2. GitHub の **Releases → Draft a new release** を開き、タグ欄に `v0.1.0` のように入力（「Create new tag on publish」）→ **Publish release**
-   - コマンドなら `git tag v0.1.0 && git push origin v0.1.0` でも同じ
+1. （必要なら）`src-tauri/tauri.conf.json` と `package.json` の `version` を上げて `main` にマージ
+2. GitHub の **Releases → Draft a new release** を開き、タグ名を入力（例: `v0.1.0`、`Beta`。「Create new tag on publish」）→ **Publish release**
 3. 10 分ほどでリリースに `-setup.exe` と `.msi` が追加される。配る相手にはリリースの URL を渡すだけ
 
-タグと `tauri.conf.json` の `version` が一致しないとビルドは失敗します（取り違え防止）。
+- 既にあるリリースに添付し直したいときは、**Actions → Release → Run workflow** でタグ名を指定して実行します（リリースが無ければ作成されます）
+- `v1.2.3` 形式のタグは、`tauri.conf.json` の `version` と一致しないと失敗します（取り違え防止）。`Beta` のような自由な名前ならチェックしません
+- Draft のまま保存しただけでは動きません。Publish（または Pre-release として Publish）したときに動きます
 
 SmartScreen の警告を消したい場合はコード署名が必要です（Azure Trusted Signing などの有料サービス）。個人で配る程度なら無署名のままで問題ありません。
 
