@@ -1,2 +1,135 @@
 # SoyokazeMemo
+
 一時的な手書きメモ　コピペなどするときに
+
+チャットにちょっと図を貼りたい、スクショに丸を付けて送りたい——そんなとき用の、**出力先がクリップボードだけ**の軽量ペイントアプリです。
+ファイル保存機能は意図的に持たせていません。描いて `Ctrl+C`、チャットで `Ctrl+V`、それだけ。
+
+- Windows 11 ネイティブアプリ（Tauri v2 / WebView2）
+- インストーラー（`.exe` / `.msi`）を出力可能
+- UI は OS のライト / ダークモードに自動追従、キャンバスは目に優しい下書き用紙グレー `#D9DCD6`
+
+## 機能とショートカット
+
+| 操作 | ショートカット |
+| --- | --- |
+| ペン / 消しゴム | `P` / `E`（ペンタブのペン尻は自動で消しゴム） |
+| 太さ（1〜80px） | スライダー、`[` / `]` |
+| 色（8 色の落ち着いたパレット） | `1`〜`8` |
+| 元に戻す / やり直す | `Ctrl+Z` / `Ctrl+Y`（`Ctrl+Shift+Z` も可） |
+| 画像を貼り付け | `Ctrl+V`、またはエクスプローラーからドラッグ＆ドロップ |
+| 画像をコピー（PNG） | `Ctrl+C`、または「画像をコピー」ボタン |
+| すべて消去 | ゴミ箱ボタン（`Ctrl+Z` で戻せる） |
+
+貼り付けた画像は「未確定」の状態で浮いていて、次の操作ができます。
+
+| 操作 | 内容 |
+| --- | --- |
+| 画像の内側をドラッグ | 移動 |
+| 角の □ をドラッグ | 拡大縮小（縦横比固定。`Shift` で比率フリー） |
+| 上の ◯ をドラッグ | 回転（`Shift` で 15° 刻み） |
+| ホイール / 矢印キー | 拡大縮小 / 1px 移動（`Shift` で 10px） |
+| `Enter` / 画像の外側をクリック | 確定（キャンバスに焼き付け。以降はペン・消しゴムの対象） |
+| `Esc` / `Delete` / `Ctrl+Z` | 貼り付けを取り消し |
+
+## 技術構成
+
+| 役割 | 採用 | 理由 |
+| --- | --- | --- |
+| 描画 | HTML5 Canvas + TypeScript（フレームワークなし） | 機能が小さいので素の DOM で十分。バンドルは JS 17KB 程度 |
+| ビルド | Vite | Tauri 公式テンプレートと同じ構成 |
+| デスクトップ化 | **Tauri v2** | Windows 11 標準の WebView2 を使うのでインストーラーが数 MB（Electron は 80MB 超）。起動も速くメモリも軽い |
+| クリップボード | Rust の [`arboard`](https://crates.io/crates/arboard) | Windows では `PNG` 形式と `CF_DIBV5` の両方を登録するので、Discord / Slack / LINE / Office / ペイント等どこにでも貼れる |
+| インストーラー | Tauri bundler（NSIS / WiX） | `npm run tauri build` 一発で `.exe` と `.msi` を出力 |
+
+実装方針の詳細（レイヤー構成、ペースト画像を確定させるまでの UI、PNG エクスポートの流れ、履歴管理）は [docs/DESIGN.md](docs/DESIGN.md) を参照してください。
+
+## 環境構築（Windows 11）
+
+PowerShell で以下を順に実行します（インストール済みのものはスキップで OK）。
+
+### 1. Microsoft C++ Build Tools
+
+Rust が Windows 向けにリンクするために必要です。
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+（Visual Studio 2022 本体の「C++ によるデスクトップ開発」ワークロードが入っていれば不要）
+
+### 2. WebView2
+
+Windows 11 には標準で入っているので作業不要です。
+
+### 3. Rust
+
+```powershell
+winget install --id Rustlang.Rustup
+# ターミナルを開き直してから
+rustup default stable-msvc
+```
+
+### 4. Node.js（LTS）
+
+```powershell
+winget install --id OpenJS.NodeJS.LTS
+```
+
+### 5. 依存パッケージのインストール
+
+```powershell
+git clone https://github.com/ThunFasky/SoyokazeMemo.git
+cd SoyokazeMemo
+npm install
+```
+
+## 開発
+
+```powershell
+npm run tauri dev
+```
+
+初回は Rust のクレートのビルドで数分かかります。フロントエンド（`src/`）の変更はホットリロードされます。
+
+UI だけ触りたいときはブラウザでも動きます（`npm run dev` → <http://localhost:1420>）。
+このときクリップボード操作は Tauri ではなくブラウザの Async Clipboard API にフォールバックします。
+
+## インストーラーのビルド
+
+```powershell
+npm run tauri build
+```
+
+出力先:
+
+| 形式 | パス |
+| --- | --- |
+| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.1.0_x64-setup.exe` |
+| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.1.0_x64_ja-JP.msi` |
+
+どちらもスタートメニューに登録され、「設定 > アプリ」からアンインストールできます。
+普段使いなら NSIS 版（`-setup.exe`）がおすすめです。
+
+- MSI のビルドで `light.exe` が失敗する場合は、Windows の「オプション機能」で **VBSCRIPT** が有効になっているか確認してください（WiX が内部で使用します）。
+- ローカルに Rust 環境を作らなくても、GitHub Actions の **Windows installer** ワークフロー（`src/` や `src-tauri/` を push したとき、または Actions タブから手動実行）でビルドされ、Artifacts からダウンロードできます。
+
+## ディレクトリ構成
+
+```
+├─ index.html              ツールバーとキャンバスの DOM
+├─ src/
+│  ├─ main.ts              UI の配線（ポインタ・キーボード・ペースト・D&D・トースト）
+│  ├─ board.ts             描画レイヤーと Undo/Redo 履歴（コマンド方式）
+│  ├─ floating.ts          貼り付け画像の移動・拡縮・回転と当たり判定
+│  ├─ clipboard.ts         PNG 書き出し / 画像の取り込み
+│  ├─ palette.ts           背景色・パレット・太さの範囲
+│  └─ styles.css           テーマ（prefers-color-scheme で自動切替）
+├─ src-tauri/
+│  ├─ src/main.rs          Tauri の起動
+│  ├─ src/clipboard.rs     OS クリップボードへの PNG 書き込み / 画像読み取り
+│  ├─ tauri.conf.json      ウィンドウ・CSP・インストーラー設定
+│  └─ icons/               アプリアイコン（assets/app-icon.svg から生成）
+├─ assets/app-icon.svg     アイコンの元データ（`npx tauri icon assets/app-icon.svg -o src-tauri/icons`）
+└─ docs/DESIGN.md          実装方針
+```

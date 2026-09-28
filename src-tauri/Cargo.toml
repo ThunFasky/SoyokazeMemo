@@ -1,0 +1,24 @@
+[package]
+name = "soyokaze-memo"
+version = "0.1.0"
+description = "一時的な手書きメモ。描いたものはクリップボードにだけ出力する軽量ペイント"
+authors = ["ThunFasky"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+# OS クリップボードへの画像読み書き（Windows では CF_DIBV5 などを扱ってくれる）
+arboard = "3.6"
+# フロントから受け取った PNG をデコード / クリップボードのビットマップを PNG にエンコード
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
