@@ -9,6 +9,15 @@
 - インストーラー（`.exe` / `.msi`）を出力可能
 - UI は OS のライト / ダークモードに自動追従、キャンバスは目に優しい下書き用紙グレー `#D9DCD6`
 
+## インストール（使うだけの人向け）
+
+1. [Releases](https://github.com/ThunFasky/SoyokazeMemo/releases/latest) から `SoyokazeMemo_x.y.z_x64-setup.exe` をダウンロード
+2. ダブルクリックしてインストール（管理者権限は不要。最後の画面でそのまま起動できます）
+3. 以降はスタートメニューの「SoyokazeMemo」から起動。アンインストールは「設定 > アプリ」から
+
+> **「Windows によって PC が保護されました」と出た場合**
+> コード署名をしていないアプリには SmartScreen の警告が出ます。「詳細情報」→「実行」で起動できます。
+
 ## 機能とショートカット
 
 | 操作 | ショートカット |
@@ -112,7 +121,20 @@ npm run tauri build
 普段使いなら NSIS 版（`-setup.exe`）がおすすめです。
 
 - MSI のビルドで `light.exe` が失敗する場合は、Windows の「オプション機能」で **VBSCRIPT** が有効になっているか確認してください（WiX が内部で使用します）。
-- ローカルに Rust 環境を作らなくても、GitHub Actions の **Windows installer** ワークフロー（`src/` や `src-tauri/` を push したとき、または Actions タブから手動実行）でビルドされ、Artifacts からダウンロードできます。
+- ローカルに Rust 環境を作らなくても、GitHub Actions の **Windows installer** ワークフロー（`src/` や `src-tauri/` を push したとき、または Actions タブから手動実行）でビルドされます。Artifacts から `.exe` / `.msi` をそのままダウンロードできます（zip ではありません）。
+
+## リリース（配布）の手順
+
+`v` から始まるタグを作ると、**Release** ワークフローがインストーラーをビルドして GitHub Releases に添付します。
+
+1. `src-tauri/tauri.conf.json` と `package.json` の `version` を上げて `main` にマージ
+2. GitHub の **Releases → Draft a new release** を開き、タグ欄に `v0.1.0` のように入力（「Create new tag on publish」）→ **Publish release**
+   - コマンドなら `git tag v0.1.0 && git push origin v0.1.0` でも同じ
+3. 10 分ほどでリリースに `-setup.exe` と `.msi` が追加される。配る相手にはリリースの URL を渡すだけ
+
+タグと `tauri.conf.json` の `version` が一致しないとビルドは失敗します（取り違え防止）。
+
+SmartScreen の警告を消したい場合はコード署名が必要です（Azure Trusted Signing などの有料サービス）。個人で配る程度なら無署名のままで問題ありません。
 
 ## ディレクトリ構成
 
