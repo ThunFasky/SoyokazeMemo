@@ -1,5 +1,5 @@
 import "./styles.css";
-import { Board, type Tool } from "./board";
+import { Board, tracePath, type Tool } from "./board";
 import {
   copyCanvasToClipboard,
   decodeImage,
@@ -8,7 +8,7 @@ import {
   isNativeApp,
   readNativeClipboardImage,
 } from "./clipboard";
-import { FloatingImage, type DragStart, type Vec } from "./floating";
+import { FloatingImage, strokeMarchingAnts, type DragStart, type Vec } from "./floating";
 import { PALETTE, SIZE_MAX, SIZE_MIN } from "./palette";
 
 // ================================================================== DOM
@@ -40,8 +40,11 @@ const toolButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[da
 
 const board = new Board($<HTMLCanvasElement>("#ink"));
 
+/** ツールバーで選べるツール。lasso は投げ縄選択 */
+type ActiveTool = Tool | "lasso";
+
 const state = {
-  tool: "pen" as Tool,
+  tool: "pen" as ActiveTool,
   color: PALETTE[0].value,
   /** ペンと消しゴムで太さを別々に覚えておく */
   sizes: { pen: 4, eraser: 24 } as Record<Tool, number>,
@@ -58,6 +61,8 @@ type Gesture =
   | { kind: "idle" }
   | { kind: "draw"; pointerId: number }
   | { kind: "transform"; pointerId: number; drag: DragStart; last: Vec }
+  /** 投げ縄で範囲をなぞっている途中 */
+  | { kind: "lasso"; pointerId: number; points: number[] }
   /** 未確定画像の外側クリック（＝確定）。そのクリックでは線を引かない */
   | { kind: "swallow"; pointerId: number };
 
@@ -78,7 +83,7 @@ const swatches = PALETTE.map((c, i) => {
 });
 
 for (const b of toolButtons) {
-  b.addEventListener("click", () => setTool(b.dataset.tool as Tool));
+  b.addEventListener("click", () => setTool(b.dataset.tool as ActiveTool));
 }
 
 sizeInput.min = String(SIZE_MIN);
@@ -98,7 +103,7 @@ toolbar.addEventListener("mousedown", (e) => {
   if ((e.target as Element).closest("button")) e.preventDefault();
 });
 
-function setTool(tool: Tool): void {
+function setTool(tool: ActiveTool): void {
   state.tool = tool;
   updateUi();
 }
@@ -110,11 +115,13 @@ function setColor(color: string): void {
 }
 
 function setSize(size: number): void {
+  if (state.tool === "lasso") return;
   state.sizes[state.tool] = Math.round(Math.min(SIZE_MAX, Math.max(SIZE_MIN, size)));
   updateUi();
 }
 
 function stepSize(dir: 1 | -1): void {
+  if (state.tool === "lasso") return;
   const s = state.sizes[state.tool];
   const step = s < 10 ? 1 : s < 30 ? 2 : 5;
   setSize(s + dir * step);
@@ -125,18 +132,23 @@ function updateUi(): void {
   redoBtn.disabled = !board.canRedo || !!floating;
   clearBtn.disabled = board.isBlank && !floating;
   floatHint.hidden = !floating;
+  floatHint.dataset.mode = floating?.selection ? "selection" : "image";
   emptyHint.classList.toggle("hidden", !board.isBlank || !!floating);
 
   for (const b of toolButtons) b.setAttribute("aria-pressed", String(b.dataset.tool === state.tool));
   for (const s of swatches) s.setAttribute("aria-pressed", String(s.dataset.color === state.color));
 
-  const size = state.sizes[state.tool];
+  // 投げ縄のときは太さが関係ないのでスライダーを無効にする
+  const lasso = state.tool === "lasso";
+  const size = lasso ? state.sizes.pen : state.sizes[state.tool as Tool];
+  sizeInput.disabled = lasso;
   sizeInput.value = String(size);
-  sizeValue.textContent = String(size);
+  sizeValue.textContent = lasso ? "–" : String(size);
   const dot = Math.max(3, Math.min(size, 24));
   sizeDot.style.width = sizeDot.style.height = `${dot}px`;
   sizeDot.style.background = state.color;
   sizeDot.classList.toggle("eraser", state.tool === "eraser");
+  sizeDot.classList.toggle("lasso", lasso);
 
   if (gesture.kind === "idle") {
     overlay.style.cursor = floating ? floating.cursorFor(hover && floating.hitTest(hover)) : "crosshair";
@@ -212,12 +224,29 @@ function renderOverlay(): void {
   octx.clearRect(0, 0, overlay.width, overlay.height);
   octx.restore();
 
+  const now = performance.now();
   if (floating) {
-    floating.draw(octx);
-  } else if (hover) {
+    floating.draw(octx, now);
+  } else if (gesture.kind === "lasso") {
+    drawLassoInProgress(gesture.points, now);
+  } else if (hover && state.tool !== "lasso") {
     drawBrushCursor(hover, state.sizes[state.tool]);
   }
 }
+
+/** なぞっている途中の投げ縄。始点まで自動で閉じた形を、うっすら塗りつぶして見せる */
+function drawLassoInProgress(points: number[], now: number): void {
+  if (points.length < 4) return;
+  tracePath(octx, points);
+  octx.fillStyle = "rgba(58, 123, 213, 0.14)";
+  octx.fill("nonzero");
+  strokeMarchingAnts(octx, now);
+}
+
+// 選択範囲の点線を動かし続ける（選択中だけ）
+window.setInterval(() => {
+  if (floating?.selection || gesture.kind === "lasso") requestOverlay();
+}, 80);
 
 /** ブラシの太さが分かる円カーソル（どんな背景でも見えるよう白黒の二重線） */
 function drawBrushCursor(p: Vec, size: number): void {
@@ -258,7 +287,14 @@ overlay.addEventListener("pointerdown", (e) => {
     // ペンタブのペン尻（消しゴム側）は button === 5 で来る
     const eraserTip = e.button === 5;
     if (e.button !== 0 && !eraserTip) return;
-    const tool: Tool = eraserTip ? "eraser" : state.tool;
+    if (state.tool === "lasso" && !eraserTip) {
+      gesture = { kind: "lasso", pointerId: e.pointerId, points: [p.x, p.y] };
+      overlay.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      requestOverlay();
+      return;
+    }
+    const tool: Tool = eraserTip || state.tool === "eraser" ? "eraser" : "pen";
     board.beginStroke(tool, state.color, state.sizes[tool], p.x, p.y);
     gesture = { kind: "draw", pointerId: e.pointerId };
     emptyHint.classList.add("hidden");
@@ -284,6 +320,16 @@ overlay.addEventListener("pointermove", (e) => {
       }
       break;
     }
+    case "lasso": {
+      if (e.pointerId !== gesture.pointerId) break;
+      const pts = gesture.points;
+      const events = e.getCoalescedEvents?.() ?? [];
+      for (const ce of events.length ? events : [e]) {
+        const q = localPos(ce, rect);
+        if (Math.hypot(q.x - pts[pts.length - 2], q.y - pts[pts.length - 1]) >= 1.5) pts.push(q.x, q.y);
+      }
+      break;
+    }
     case "transform":
       if (e.pointerId !== gesture.pointerId || !floating) break;
       gesture.last = p;
@@ -298,8 +344,10 @@ overlay.addEventListener("pointermove", (e) => {
 
 function endGesture(e: PointerEvent): void {
   if (gesture.kind === "idle" || e.pointerId !== gesture.pointerId) return;
-  if (gesture.kind === "draw") board.endStroke();
+  const ended = gesture;
   gesture = { kind: "idle" };
+  if (ended.kind === "draw") board.endStroke();
+  if (ended.kind === "lasso") liftSelection(ended.points);
   updateUi();
 }
 
@@ -344,22 +392,84 @@ async function placeImage(blob: Blob, at?: Vec): Promise<void> {
   updateUi();
 }
 
-/** 未確定画像をキャンバスに焼き付ける（Enter / 外側クリック / コピー時） */
+// ================================================================== 投げ縄選択
+
+/**
+ * 投げ縄で囲んだ部分を切り取って持ち上げる。
+ * 以降は貼り付け画像と同じハンドルで移動・拡縮・回転でき、Enter / 外側クリックで確定。
+ */
+function liftSelection(path: number[]): void {
+  if (path.length < 6 || Math.abs(polygonArea(path)) < 16) return; // クリックしただけ・細すぎる線は無視
+  commitFloating();
+  const region = board.extractRegion(path);
+  if (!region) {
+    toast("囲んだ範囲に何も描かれていません");
+    return;
+  }
+  floating = FloatingImage.fromSelection(region.bitmap, region.transform, path);
+  board.setPendingCut(path); // 元の場所は空けておく（確定するまで履歴には入らない）
+  updateUi();
+}
+
+/** Ctrl+A: キャンバス全体を選択 */
+function selectAll(): void {
+  const w = board.width;
+  const h = board.height;
+  liftSelection([0, 0, w, 0, w, h, 0, h]);
+}
+
+/** 符号付き面積（靴ひも公式） */
+function polygonArea(p: number[]): number {
+  let a = 0;
+  for (let i = 0; i < p.length; i += 2) {
+    const j = (i + 2) % p.length;
+    a += p[i] * p[j + 1] - p[j] * p[i + 1];
+  }
+  return a / 2;
+}
+
+// ================================================================== 未確定画像の確定・取消
+
+/** 未確定画像（貼り付け画像 / 選択範囲）をキャンバスに焼き付ける（Enter / 外側クリック / コピー時） */
 function commitFloating(): void {
   if (!floating) return;
   const f = floating;
   floating = null;
   if (gesture.kind === "transform") gesture = { kind: "idle" };
-  board.addImage(f.bitmap, f.t);
+  if (!f.selection) {
+    board.addImage(f.bitmap, f.t);
+  } else if (f.isUnmoved) {
+    // 選択しただけで動かしていなければ、履歴に何も残さず元に戻す
+    board.setPendingCut(null);
+    f.bitmap.close();
+  } else {
+    board.commitSelection(f.selection.path, f.bitmap, f.t);
+  }
   updateUi();
 }
 
-/** 未確定画像を破棄する（Esc / Delete / Ctrl+Z） */
+/** 未確定画像を破棄する（Esc / Ctrl+Z）。選択範囲なら元の場所に戻す */
 function cancelFloating(): void {
   if (!floating) return;
-  floating.bitmap.close();
+  const f = floating;
   floating = null;
   if (gesture.kind === "transform") gesture = { kind: "idle" };
+  if (f.selection) board.setPendingCut(null);
+  f.bitmap.close();
+  updateUi();
+}
+
+/** Delete / Backspace: 貼り付け画像なら取消、選択範囲なら中身を削除 */
+function deleteFloating(): void {
+  if (!floating?.selection) {
+    cancelFloating();
+    return;
+  }
+  const f = floating;
+  floating = null;
+  if (gesture.kind === "transform") gesture = { kind: "idle" };
+  board.commitSelection(f.selection!.path, null, null);
+  f.bitmap.close();
   updateUi();
 }
 
@@ -479,8 +589,10 @@ window.addEventListener(
       };
       if (key === "Enter") {
         commitFloating();
-      } else if (key === "Escape" || key === "Delete" || key === "Backspace") {
+      } else if (key === "Escape") {
         cancelFloating();
+      } else if (key === "Delete" || key === "Backspace") {
+        deleteFloating();
       } else if (key in arrows) {
         floating.nudge(...arrows[key]);
         requestOverlay();
@@ -499,6 +611,8 @@ window.addEventListener(
         else undo();
       } else if (key === "y") {
         redo();
+      } else if (key === "a") {
+        if (!e.repeat) selectAll();
       } else if (key === "c") {
         if (!e.repeat) void copyImage();
       } else if (key === "v") {
@@ -532,10 +646,11 @@ window.addEventListener("keyup", (e) => {
   }
 });
 
-/** P / E / [ / ] / 1〜8 */
+/** P / E / L / [ / ] / 1〜8 */
 function handleToolKeys(e: KeyboardEvent, key: string): void {
   if (key === "p" || key === "b") setTool("pen");
   else if (key === "e") setTool("eraser");
+  else if (key === "l") setTool("lasso");
   else if (key === "[") stepSize(-1);
   else if (key === "]") stepSize(1);
   else if (/^[1-9]$/.test(key) && Number(key) <= PALETTE.length) setColor(PALETTE[Number(key) - 1].value);
