@@ -24,6 +24,14 @@
           </svg>
           <span class="sr-only">消しゴム</span>
         </button>
+        <button class="icon-btn" data-tool="lasso" aria-pressed="false" title="投げ縄選択 (L) ― 囲んだ部分を移動・拡大縮小・回転">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8.5 17.2C5.3 16.3 3 14.3 3 11.8 3 8 7 5 12 5s9 3 9 6.8-4 6.8-9 6.8c-.7 0-1.4 0-2-.1" stroke-dasharray="2.6 2.4" />
+            <circle cx="9" cy="18.6" r="1.6" />
+            <path d="M8.2 20.1c-.6.9-.9 1.6-.8 2.4" />
+          </svg>
+          <span class="sr-only">投げ縄選択</span>
+        </button>
       </div>
 
       <div class="group size-group" title="太さ ( [ / ] )">
@@ -85,7 +93,9 @@
         <span>角で拡大縮小（<kbd>Shift</kbd> 比率フリー）</span>
         <span>◯ で回転（<kbd>Shift</kbd> 15°刻み）</span>
         <span><kbd>Enter</kbd> / 外側クリックで確定</span>
-        <span><kbd>Esc</kbd> で取消</span>
+        <span data-only="image"><kbd>Esc</kbd> で取消</span>
+        <span data-only="selection"><kbd>Esc</kbd> で元に戻す</span>
+        <span data-only="selection"><kbd>Delete</kbd> で削除</span>
       </div>
 
       <div class="toast" id="toast" role="status" aria-live="polite"></div>

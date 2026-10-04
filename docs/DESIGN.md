@@ -98,7 +98,32 @@ local = rotate(p - center, -rotation)
 `clipboardData` はハンドラを抜けると読めなくなるので、Blob の取り出しだけ同期で行い、デコード（`createImageBitmap`）は非同期にしています。
 `Ctrl+V` を押しても `paste` イベントが来なかった場合に備え、150ms 後に Rust 側へ読みに行くフォールバックもあります。
 
-## 3. クリップボードへの PNG エクスポート
+## 3. 投げ縄選択
+
+ペンでなぞるように囲んだ部分を切り取り、貼り付け画像と同じハンドルで移動・拡縮・回転できます。
+
+```
+[通常] ──投げ縄でなぞる──▶ overlay にパスを薄く塗って表示（始点まで自動で閉じる）
+   │
+   └─ 離す ─▶ board.extractRegion(path)   パスで clip して実ピクセルを切り出し ImageBitmap に
+              board.setPendingCut(path)    元の場所に穴を空ける（表示だけ。履歴には入れない）
+              FloatingImage.fromSelection  ← 以降は貼り付け画像と同じ UI
+                 │
+                 ├ Enter / 外側クリック → board.commitSelection(path, bitmap, transform)
+                 │                         （動かしていなければ何も記録せず元に戻す）
+                 ├ Delete              → board.commitSelection(path, null, null)（削除）
+                 └ Esc / Ctrl+Z        → board.setPendingCut(null)（元に戻す）
+```
+
+- 履歴には `{ kind: "selection", path, bitmap, transform }` を **1 件だけ**積みます。
+  再生時は「path の内側を destination-out で消す → bitmap を transform で描く」なので、
+  `Ctrl+Z` 1 回で切り取りと移動がまとめて元に戻ります。
+- 切り出しは実ピクセル単位の矩形に揃えているので、動かしただけなら画質は変わりません。
+- 持ち上げている間の「穴」は `pendingCut` として Board が覚えていて、ウィンドウのリサイズで描き直しても消えません。
+- パスの塗りは `nonzero` なので、8 の字のように交差した投げ縄でも囲まれた部分はすべて選択されます。
+- 何も描かれていない範囲を囲んだ場合は持ち上げず、トーストで知らせます。
+
+## 4. クリップボードへの PNG エクスポート
 
 ```
 board.exportCanvas()           背景 #D9DCD6 で塗った新規キャンバスに、インクレイヤーを重ねる
@@ -122,7 +147,7 @@ canvas.toBlob("image/png")     ブラウザ側で PNG エンコード（非同�
   ブラウザによっては「ユーザー操作の直後」扱いが切れて拒否されるためです。
 - ファイル保存機能は持たないので、WebView の右クリックメニュー（「名前を付けて画像を保存」を含む）も無効化しています。
 
-## 4. 履歴（Undo / Redo）
+## 5. 履歴（Undo / Redo）
 
 ピクセルのスナップショットではなく、**描画コマンドの配列**で持っています。
 
@@ -130,7 +155,8 @@ canvas.toBlob("image/png")     ブラウザ側で PNG エンコード（非同�
 type Command =
   | { kind: "stroke"; tool; color; size; points: number[] }
   | { kind: "image"; bitmap; transform }
-  | { kind: "clear" };
+  | { kind: "clear" }
+  | { kind: "selection"; path; bitmap | null; transform | null };
 ```
 
 - WQHD のスナップショットは 1 枚 14MB を超えるので、コマンド方式の方が圧倒的に軽い

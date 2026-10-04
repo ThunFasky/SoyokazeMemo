@@ -1,4 +1,4 @@
-import { drawImageWithTransform, type ImageTransform } from "./board";
+import { drawImageWithTransform, tracePath, type ImageTransform } from "./board";
 
 export interface Vec {
   x: number;
@@ -35,6 +35,14 @@ export interface DragStart {
   transform: ImageTransform;
 }
 
+/** 投げ縄で持ち上げた選択範囲の情報 */
+export interface SelectionSource {
+  /** 投げ縄のパス（持ち上げた時点の CSS px 座標） */
+  path: number[];
+  /** 持ち上げた時点の配置（動かしていないかの判定と、輪郭の描画に使う） */
+  initial: ImageTransform;
+}
+
 /**
  * ペーストされた直後の「まだ確定していない」画像。
  * キャンバスには焼かず、オーバーレイに描画して移動・拡縮・回転を受け付ける。
@@ -42,10 +50,25 @@ export interface DragStart {
 export class FloatingImage {
   readonly bitmap: ImageBitmap;
   t: ImageTransform;
+  /** 投げ縄選択から作られた場合だけ入る */
+  readonly selection: SelectionSource | null;
 
-  constructor(bitmap: ImageBitmap, t: ImageTransform) {
+  constructor(bitmap: ImageBitmap, t: ImageTransform, selection: SelectionSource | null = null) {
     this.bitmap = bitmap;
     this.t = t;
+    this.selection = selection;
+  }
+
+  /** 投げ縄で切り出した範囲を、元の位置にそのまま浮かせる */
+  static fromSelection(bitmap: ImageBitmap, t: ImageTransform, path: number[]): FloatingImage {
+    return new FloatingImage(bitmap, { ...t }, { path, initial: { ...t } });
+  }
+
+  /** 持ち上げてから一度も動かしていないか */
+  get isUnmoved(): boolean {
+    const a = this.t;
+    const b = this.selection?.initial;
+    return !!b && a.cx === b.cx && a.cy === b.cy && a.w === b.w && a.h === b.h && a.rotation === b.rotation;
   }
 
   /**
@@ -157,8 +180,9 @@ export class FloatingImage {
   // ------------------------------------------------------------ 描画
 
   /** オーバーレイに画像本体 + バウンディングボックス + ハンドルを描く */
-  draw(ctx: CanvasRenderingContext2D): void {
+  draw(ctx: CanvasRenderingContext2D, now = 0): void {
     drawImageWithTransform(ctx, this.bitmap, this.t);
+    if (this.selection) this.drawLassoOutline(ctx, now);
 
     const { cx, cy, w, h, rotation } = this.t;
     const hw = w / 2;
@@ -203,6 +227,36 @@ export class FloatingImage {
     }
     ctx.restore();
   }
+
+  /** 投げ縄の輪郭を、今の移動・拡縮・回転に合わせて動く点線で描く */
+  private drawLassoOutline(ctx: CanvasRenderingContext2D, now: number): void {
+    const sel = this.selection;
+    if (!sel) return;
+    const { cx, cy, w, h, rotation } = this.t;
+    const init = sel.initial;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotation);
+    ctx.scale(w / init.w, h / init.h);
+    ctx.translate(-init.cx, -init.cy);
+    tracePath(ctx, sel.path);
+    ctx.restore(); // パスは保持したまま、線の太さだけ拡縮の影響を受けないようにする
+    strokeMarchingAnts(ctx, now);
+  }
+}
+
+/** 白黒の「動く点線」。選択範囲の定番表示 */
+export function strokeMarchingAnts(ctx: CanvasRenderingContext2D, now: number): void {
+  ctx.save();
+  ctx.lineWidth = 1.25;
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.stroke();
+  ctx.setLineDash([5, 4]);
+  ctx.lineDashOffset = -(now / 60) % 9;
+  ctx.strokeStyle = "rgba(20, 22, 26, 0.9)";
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**
