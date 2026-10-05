@@ -7,6 +7,17 @@
     <title>SoyokazeMemo</title>
   </head>
   <body>
+    <!-- OS のタイトルバーは消して（decorations: false）自前で描く。空いている所をドラッグで移動、ダブルクリックで最大化 -->
+    <div class="titlebar" id="titlebar" data-tauri-drag-region="deep">
+      <img class="app-icon" src="/assets/soyokazeMemoIcon.png" alt="" width="20" height="20" draggable="false" />
+      <img class="app-logo" src="/assets/soyokazeMemoLogo.png" alt="SoyokazeMemo" width="130" height="28" draggable="false" />
+      <div class="window-controls" id="window-controls" hidden>
+        <button class="caption-btn" data-window="minimize" tabindex="-1" title="最小化" aria-label="最小化"></button>
+        <button class="caption-btn" data-window="maximize" tabindex="-1" title="最大化" aria-label="最大化"></button>
+        <button class="caption-btn close" data-window="close" tabindex="-1" title="閉じる" aria-label="閉じる"></button>
+      </div>
+    </div>
+
     <header class="toolbar" role="toolbar" aria-label="ツールバー">
       <div class="group" role="group" aria-label="ツール">
         <button class="icon-btn" data-tool="pen" aria-pressed="true" title="ペン (P)">

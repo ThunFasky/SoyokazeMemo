@@ -8,6 +8,7 @@
   --canvas-bg: #d9dcd6; /* src/palette.ts の CANVAS_BG と揃えること */
 
   --ui-bg: #f5f5f3;
+  --titlebar-bg: #ebece8;
   --ui-fg: #2b2d30;
   --ui-muted: #6b6f75;
   --ui-border: #dddeda;
@@ -28,6 +29,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --ui-bg: #232427;
+    --titlebar-bg: #1b1c1f;
     --ui-fg: #e7e7e4;
     --ui-muted: #9ca0a6;
     --ui-border: #36383c;
@@ -89,6 +91,91 @@ kbd {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* ---------------------------- タイトルバー ---------------------------- */
+/* OS のタイトルバーの代わり（tauri.conf.json で decorations: false）。高さとボタン幅は Windows 11 に合わせる */
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding-left: 10px;
+  background: var(--titlebar-bg);
+  flex-shrink: 0;
+}
+
+.titlebar img {
+  display: block;
+  flex-shrink: 0;
+  transition: opacity 0.12s;
+}
+
+/* ドット絵なので、表示スケール 125% などで拡大されてもにじませない */
+.app-logo {
+  image-rendering: pixelated;
+}
+
+.titlebar.inactive img {
+  opacity: 0.5;
+}
+
+.window-controls {
+  display: flex;
+  align-self: stretch;
+  margin-left: auto;
+}
+
+.window-controls[hidden] {
+  display: none;
+}
+
+/* アイコンは Windows 標準のタイトルバーと同じフォントのグリフ（Win11: Segoe Fluent Icons / Win10: Segoe MDL2 Assets） */
+.caption-btn {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+  font-size: 10px;
+  transition: background-color 0.1s;
+}
+
+.caption-btn[data-window="minimize"]::before {
+  content: "\e921";
+}
+
+.caption-btn[data-window="maximize"]::before {
+  content: "\e922";
+}
+
+.caption-btn[data-window="maximize"][data-maximized="true"]::before {
+  content: "\e923";
+}
+
+.caption-btn[data-window="close"]::before {
+  content: "\e8bb";
+}
+
+.caption-btn:hover {
+  background: var(--btn-hover);
+}
+
+.caption-btn:active {
+  background: var(--btn-active);
+}
+
+.caption-btn.close:hover {
+  background: #c42b1c;
+  color: #ffffff;
+}
+
+.caption-btn.close:active {
+  background: #c83c31;
+  color: #ffffff;
+}
+
+.titlebar.inactive .caption-btn:not(:hover) {
+  color: var(--ui-muted);
 }
 
 /* ---------------------------- ツールバー ---------------------------- */

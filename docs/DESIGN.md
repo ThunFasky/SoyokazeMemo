@@ -169,3 +169,20 @@ base より前まで戻ったときだけ作り直します（直近の「全消
 
 線は中点を結ぶ二次ベジェで滑らかにしています。描画中は 1 区間ずつ、再生時は 1 本のパスとして同じ形を描きます。
 `getCoalescedEvents()` で高ポーリングレートのマウスやペンタブの中間点も拾っています。
+
+## 6. タイトルバー
+
+OS のタイトルバーには画像を置けないので、`tauri.conf.json` で `decorations: false` にして HTML で描いています
+（左端にアイコンとロゴ画像、右端に 最小化 / 最大化 / 閉じる）。
+
+- **移動・最大化**: バーに `data-tauri-drag-region="deep"` を付けているので、ボタン以外のどこを掴んでもドラッグで移動、
+  ダブルクリックで最大化 / 元に戻すになります（Tauri 側の処理。画面端へのスナップも OS のものがそのまま効きます）。
+- **リサイズ**: 枠なしウィンドウでも Tauri（tao）が縁のヒットテストをしてくれるので、OS と同じように縁をつまんで変えられます。
+- **ボタン**: `titlebar.ts` で `getCurrentWindow().minimize()` などを呼びます。許可は `capabilities/default.json` に
+  `core:window:allow-start-dragging` / `allow-minimize` / `allow-toggle-maximize` / `allow-close` を追加しています。
+  グリフは Windows 標準と同じ Segoe Fluent Icons（Windows 10 は Segoe MDL2 Assets）で、閉じるのホバーは標準の赤です。
+  最大化状態は `onResized` のたびに `isMaximized()` で確認してアイコンを切り替えます。
+- **非アクティブ表示**: `onFocusChanged` でほかのウィンドウを操作している間はロゴとボタンを薄くします。
+- ロゴとアイコンはドット絵なので、ロゴは `image-rendering: pixelated` で拡大時もにじませません。
+  Vite が 4KB 未満の画像を data URI としてインライン化するので、CSP の `img-src data:` で表示できます。
+- ブラウザで開いたとき（`npm run dev`）はウィンドウを操作できないので、ボタンだけ隠しています。

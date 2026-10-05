@@ -10,6 +10,7 @@ import {
 } from "./clipboard";
 import { FloatingImage, strokeMarchingAnts, type DragStart, type Vec } from "./floating";
 import { PALETTE, SIZE_MAX, SIZE_MIN } from "./palette";
+import { initTitlebar } from "./titlebar";
 
 // ================================================================== DOM
 
@@ -686,6 +687,7 @@ stage.addEventListener("animationend", () => stage.classList.remove("flash"));
 
 // ================================================================== 起動
 
+initTitlebar($("#titlebar"));
 updateUi();
 
 // 開発時だけ、動作確認用に内部状態を覗けるようにしておく
