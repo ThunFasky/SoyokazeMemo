@@ -159,6 +159,6 @@ SmartScreen の警告を消したい場合はコード署名が必要です（Az
 ├─ assets/
 │  ├─ soyokazeMemoIcon.png アイコンの元データ（50x50 のドット絵。タイトルバー左端にも表示）
 │  └─ soyokazeMemoLogo.png タイトルバーのロゴ
-├─ scripts/generate-icons.ps1  アイコン一式の生成（ドット絵をニアレストネイバーで拡大してから `tauri icon` に渡す）
+├─ scripts/generate-icons.ps1  アイコン一式の生成（icon.ico などはドットが崩れないよう、サイズごとに整数倍の拡大や等倍の切り出しで作る）
 └─ docs/DESIGN.md          実装方針
 ```
