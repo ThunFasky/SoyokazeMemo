@@ -116,8 +116,8 @@ npm run tauri build
 
 | 形式 | パス |
 | --- | --- |
-| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.2.0_x64-setup.exe` |
-| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.2.0_x64_ja-JP.msi` |
+| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.2.1_x64-setup.exe` |
+| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.2.1_x64_ja-JP.msi` |
 
 どちらもスタートメニューに登録され、「設定 > アプリ」からアンインストールできます。
 普段使いなら NSIS 版（`-setup.exe`）がおすすめです。
@@ -159,6 +159,6 @@ SmartScreen の警告を消したい場合はコード署名が必要です（Az
 ├─ assets/
 │  ├─ soyokazeMemoIcon.png アイコンの元データ（50x50 のドット絵。タイトルバー左端にも表示）
 │  └─ soyokazeMemoLogo.png タイトルバーのロゴ
-├─ scripts/generate-icons.ps1  アイコン一式の生成（ドット絵をニアレストネイバーで拡大してから `tauri icon` に渡す）
+├─ scripts/generate-icons.ps1  アイコン一式の生成（icon.ico などはドットが崩れないよう、サイズごとに整数倍の拡大や等倍の切り出しで作る）
 └─ docs/DESIGN.md          実装方針
 ```
