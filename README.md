@@ -116,8 +116,8 @@ npm run tauri build
 
 | 形式 | パス |
 | --- | --- |
-| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.1.0_x64-setup.exe` |
-| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.1.0_x64_ja-JP.msi` |
+| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.2.0_x64-setup.exe` |
+| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.2.0_x64_ja-JP.msi` |
 
 どちらもスタートメニューに登録され、「設定 > アプリ」からアンインストールできます。
 普段使いなら NSIS 版（`-setup.exe`）がおすすめです。
