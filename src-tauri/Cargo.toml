@@ -1,6 +1,6 @@
 [package]
 name = "soyokaze-memo"
-version = "0.2.0"
+version = "0.2.1"
 description = "一時的な手書きメモ。描いたものはクリップボードにだけ出力する軽量ペイント"
 authors = ["ThunFasky"]
 edition = "2021"
