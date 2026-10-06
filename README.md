@@ -47,7 +47,7 @@
 
 | 役割 | 採用 | 理由 |
 | --- | --- | --- |
-| 描画 | HTML5 Canvas + TypeScript（フレームワークなし） | 機能が小さいので素の DOM で十分。バンドルは JS 17KB 程度 |
+| 描画 | HTML5 Canvas + TypeScript（フレームワークなし） | 機能が小さいので素の DOM で十分。バンドルは JS 40KB 程度 |
 | ビルド | Vite | Tauri 公式テンプレートと同じ構成 |
 | デスクトップ化 | **Tauri v2** | Windows 11 標準の WebView2 を使うのでインストーラーが数 MB（Electron は 80MB 超）。起動も速くメモリも軽い |
 | クリップボード | Rust の [`arboard`](https://crates.io/crates/arboard) | Windows では `PNG` 形式と `CF_DIBV5` の両方を登録するので、Discord / Slack / LINE / Office / ペイント等どこにでも貼れる |
@@ -116,8 +116,8 @@ npm run tauri build
 
 | 形式 | パス |
 | --- | --- |
-| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.1.0_x64-setup.exe` |
-| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.1.0_x64_ja-JP.msi` |
+| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.2.0_x64-setup.exe` |
+| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.2.0_x64_ja-JP.msi` |
 
 どちらもスタートメニューに登録され、「設定 > アプリ」からアンインストールできます。
 普段使いなら NSIS 版（`-setup.exe`）がおすすめです。
@@ -142,9 +142,10 @@ SmartScreen の警告を消したい場合はコード署名が必要です（Az
 ## ディレクトリ構成
 
 ```
-├─ index.html              ツールバーとキャンバスの DOM
+├─ index.html              タイトルバー・ツールバー・キャンバスの DOM
 ├─ src/
 │  ├─ main.ts              UI の配線（ポインタ・キーボード・ペースト・D&D・トースト）
+│  ├─ titlebar.ts          自前のタイトルバー（最小化・最大化・閉じる）
 │  ├─ board.ts             描画レイヤーと Undo/Redo 履歴（コマンド方式）
 │  ├─ floating.ts          貼り付け画像の移動・拡縮・回転と当たり判定
 │  ├─ clipboard.ts         PNG 書き出し / 画像の取り込み
@@ -154,7 +155,10 @@ SmartScreen の警告を消したい場合はコード署名が必要です（Az
 │  ├─ src/main.rs          Tauri の起動
 │  ├─ src/clipboard.rs     OS クリップボードへの PNG 書き込み / 画像読み取り
 │  ├─ tauri.conf.json      ウィンドウ・CSP・インストーラー設定
-│  └─ icons/               アプリアイコン（assets/app-icon.svg から生成）
-├─ assets/app-icon.svg     アイコンの元データ（`npx tauri icon assets/app-icon.svg -o src-tauri/icons`）
+│  └─ icons/               アプリアイコン（assets/soyokazeMemoIcon.png から `npm run icons` で生成）
+├─ assets/
+│  ├─ soyokazeMemoIcon.png アイコンの元データ（50x50 のドット絵。タイトルバー左端にも表示）
+│  └─ soyokazeMemoLogo.png タイトルバーのロゴ
+├─ scripts/generate-icons.ps1  アイコン一式の生成（ドット絵をニアレストネイバーで拡大してから `tauri icon` に渡す）
 └─ docs/DESIGN.md          実装方針
 ```
