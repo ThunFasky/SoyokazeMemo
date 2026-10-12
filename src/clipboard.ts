@@ -72,19 +72,36 @@ export function hasFiles(dt: DataTransfer | null): boolean {
   return !!dt && Array.from(dt.types).includes("Files");
 }
 
-/**
- * WebView の paste イベントで画像が取れなかったときの保険。
- * Rust 側で CF_HDROP（コピーしたファイル）→ ビットマップの順に探す。
- */
+/** Rust 側で CF_HDROP（コピーしたファイル）→ ビットマップの順に探す。画像がなければ null */
+async function invokeReadClipboardImage(): Promise<Blob | null> {
+  const buf = await invoke<ArrayBuffer>("read_clipboard_image");
+  return buf && buf.byteLength > 0 ? new Blob([buf]) : null;
+}
+
+/** WebView の paste イベントで画像が取れなかったときの保険（失敗しても null） */
 export async function readNativeClipboardImage(): Promise<Blob | null> {
   if (!isNativeApp()) return null;
   try {
-    const buf = await invoke<ArrayBuffer>("read_clipboard_image");
-    return buf && buf.byteLength > 0 ? new Blob([buf]) : null;
+    return await invokeReadClipboardImage();
   } catch (err) {
     console.warn("ネイティブのクリップボード読み取りに失敗", err);
     return null;
   }
+}
+
+/**
+ * paste イベントを使わずに（ボタンやショートカットから）クリップボードの画像を読む。
+ * Tauri 上では Rust 側で、ブラウザでは Async Clipboard API で読む（読み取りの許可を求められる）。
+ * 画像がなければ null、読み取り自体に失敗したら例外。
+ */
+export async function readClipboardImage(): Promise<Blob | null> {
+  if (isNativeApp()) return invokeReadClipboardImage();
+  if (!navigator.clipboard?.read) throw new Error("この環境はクリップボードの読み取りに対応していません");
+  for (const item of await navigator.clipboard.read()) {
+    const type = item.types.find((t) => t.startsWith("image/"));
+    if (type) return item.getType(type);
+  }
+  return null;
 }
 
 /** Blob を描画可能な ImageBitmap にする（SVG など createImageBitmap が直接読めない形式は <img> 経由） */

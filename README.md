@@ -28,8 +28,20 @@
 | 色（8 色の落ち着いたパレット） | `1`〜`8` |
 | 元に戻す / やり直す | `Ctrl+Z` / `Ctrl+Y`（`Ctrl+Shift+Z` も可） |
 | 画像を貼り付け | `Ctrl+V`、またはエクスプローラーからドラッグ＆ドロップ |
+| クリップボードの画像をそのままキャンバスにする | `Ctrl+Shift+V`、または「クリップボードから開く」ボタン |
 | 画像をコピー（PNG） | `Ctrl+C`、または「画像をコピー」ボタン |
 | すべて消去 | ゴミ箱ボタン（`Ctrl+Z` で戻せる） |
+
+### スクショにそのまま書き込む（クリップボードから開く）
+
+Snipping Tool（`Win+Shift+S`）などでスクショを撮ったら、「クリップボードから開く」ボタン（`Ctrl+Shift+V`）を押すだけで、その画像がそのままキャンバスになります。
+丸や矢印を描いて `Ctrl+C` すれば、**元のスクショと同じ大きさ・解像度**でコピーされます（周りのグレーは入りません）。
+
+- 画像は「紙（下地）」になります。消しゴムで消えるのは自分の書き込みだけで、スクショ自体は消えません。投げ縄で動かせるのも書き込みだけです
+- 画面に収まる大きさなら、画像 1px = 画面 1px でそのまま表示します。収まらない大きな画像は縮小して表示しますが、書き出しは元の大きさのままです
+- `Ctrl+V` での貼り付けやドラッグ＆ドロップは、これまで通りキャンバスの上に重ねる画像になります（画像キャンバスの上では、その画像の 1px = キャンバスの 1px で置きます）
+- `Ctrl+Z` で開く前のキャンバスに戻せます。ゴミ箱で画像ごと消すと、白紙の通常のキャンバスに戻ります
+- エクスプローラーでコピーした画像ファイルも開けます
 
 貼り付けた画像と、投げ縄で囲んだ範囲は「未確定」の状態で浮いていて、次の操作ができます。
 
@@ -116,8 +128,8 @@ npm run tauri build
 
 | 形式 | パス |
 | --- | --- |
-| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.2.1_x64-setup.exe` |
-| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.2.1_x64_ja-JP.msi` |
+| NSIS（ユーザー単位インストール、管理者権限不要） | `src-tauri/target/release/bundle/nsis/SoyokazeMemo_0.3.0_x64-setup.exe` |
+| MSI（WiX） | `src-tauri/target/release/bundle/msi/SoyokazeMemo_0.3.0_x64_ja-JP.msi` |
 
 どちらもスタートメニューに登録され、「設定 > アプリ」からアンインストールできます。
 普段使いなら NSIS 版（`-setup.exe`）がおすすめです。
@@ -146,7 +158,7 @@ SmartScreen の警告を消したい場合はコード署名が必要です（Az
 ├─ src/
 │  ├─ main.ts              UI の配線（ポインタ・キーボード・ペースト・D&D・トースト）
 │  ├─ titlebar.ts          自前のタイトルバー（最小化・最大化・閉じる）
-│  ├─ board.ts             描画レイヤーと Undo/Redo 履歴（コマンド方式）
+│  ├─ board.ts             描画レイヤーと Undo/Redo 履歴（コマンド方式）、画像キャンバスの配置
 │  ├─ floating.ts          貼り付け画像の移動・拡縮・回転と当たり判定
 │  ├─ clipboard.ts         PNG 書き出し / 画像の取り込み
 │  ├─ palette.ts           背景色・パレット・太さの範囲
@@ -157,8 +169,9 @@ SmartScreen の警告を消したい場合はコード署名が必要です（Az
 │  ├─ tauri.conf.json      ウィンドウ・CSP・インストーラー設定
 │  └─ icons/               アプリアイコン（assets/soyokazeMemoIcon.png から `npm run icons` で生成）
 ├─ assets/
-│  ├─ soyokazeMemoIcon.png アイコンの元データ（50x50 のドット絵。タイトルバー左端にも表示）
+│  ├─ soyokazeMemoIcon.png アイコンの元の絵（SoyokazeMemo で描いたもの。正方形でなくてよい）
+│  ├─ titlebar-icon*.png   タイトルバー左端のアイコン（`npm run icons` で生成。20px と高 DPI 用の 40px）
 │  └─ soyokazeMemoLogo.png タイトルバーのロゴ
-├─ scripts/generate-icons.ps1  アイコン一式の生成（icon.ico などはドットが崩れないよう、サイズごとに整数倍の拡大や等倍の切り出しで作る）
+├─ scripts/generate-icons.ps1  アイコン一式の生成（絵を紙色の角丸タイルに収め、小さいサイズは線を太らせてから縮小）
 └─ docs/DESIGN.md          実装方針
 ```

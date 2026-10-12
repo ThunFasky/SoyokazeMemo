@@ -7,11 +7,11 @@
 //!   エクスプローラーでコピーした画像ファイル（CF_HDROP）→ ビットマップの順に探す。
 
 use std::borrow::Cow;
-use std::io::Cursor;
 use std::path::Path;
 
 use arboard::{Clipboard, ImageData};
-use image::{ImageFormat, RgbaImage};
+use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+use image::{ExtendedColorType, ImageEncoder, ImageFormat};
 use tauri::ipc::{InvokeBody, Request, Response};
 
 /// 読み込みを許可する画像ファイルの最大サイズ（誤って巨大ファイルを掴んだとき用）
@@ -69,10 +69,15 @@ pub async fn read_clipboard_image() -> Result<Response, String> {
 
     // 2) スクリーンショットなどのビットマップ
     if let Ok(img) = clipboard.get_image() {
-        let rgba = RgbaImage::from_raw(img.width as u32, img.height as u32, img.bytes.into_owned())
-            .ok_or("クリップボードの画像サイズが不正です")?;
+        let (width, height) = (img.width as u32, img.height as u32);
+        if img.bytes.len() != width as usize * height as usize * 4 {
+            return Err("クリップボードの画像サイズが不正です".into());
+        }
+        // 同じ PC 内で WebView に渡すだけなので、圧縮率より速さを優先する。
+        // 既定の Adaptive フィルタは行ごとに全フィルタを試すので重く、画面全体のスクショだと待たされる
         let mut png = Vec::new();
-        rgba.write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
+        PngEncoder::new_with_quality(&mut png, CompressionType::Fast, FilterType::Up)
+            .write_image(&img.bytes, width, height, ExtendedColorType::Rgba8)
             .map_err(|e| format!("PNG へのエンコードに失敗しました: {e}"))?;
         return Ok(Response::new(png));
     }

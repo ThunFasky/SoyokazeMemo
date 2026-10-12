@@ -1,9 +1,15 @@
-import { drawImageWithTransform, tracePath, type ImageTransform } from "./board";
-
-export interface Vec {
-  x: number;
-  y: number;
-}
+import {
+  drawImageWithTransform,
+  mapPath,
+  mapTransform,
+  tracePath,
+  viewToCss,
+  viewToDoc,
+  type ImageTransform,
+  type Rect,
+  type Vec,
+  type View,
+} from "./board";
 
 /** バウンディングボックス上の掴める場所 */
 export type Handle = "move" | "rotate" | "nw" | "ne" | "se" | "sw";
@@ -37,7 +43,7 @@ export interface DragStart {
 
 /** 投げ縄で持ち上げた選択範囲の情報 */
 export interface SelectionSource {
-  /** 投げ縄のパス（持ち上げた時点の CSS px 座標） */
+  /** 投げ縄のパス（CSS px。画面上の配置が変わったら remap で追従する） */
   path: number[];
   /** 持ち上げた時点の配置（動かしていないかの判定と、輪郭の描画に使う） */
   initial: ImageTransform;
@@ -73,19 +79,20 @@ export class FloatingImage {
 
   /**
    * 画像の初期配置を決める。
-   * 画像 1px = 画面 1 実ピクセルで置き、画面の 90% に収まらない場合は縮小する。
+   * 画像 1px = 書き出し 1px（cssPerPixel CSS px）で置き、box の 90% に収まらない場合は縮小する。
+   * box は描ける範囲（通常はステージ全体、画像キャンバスでは画像が表示されている範囲）。
    */
-  static place(bitmap: ImageBitmap, viewW: number, viewH: number, pixelRatio: number, at?: Vec): FloatingImage {
-    let w = bitmap.width / pixelRatio;
-    let h = bitmap.height / pixelRatio;
-    const fit = Math.min(1, (viewW * 0.9) / w, (viewH * 0.9) / h);
+  static place(bitmap: ImageBitmap, box: Rect, cssPerPixel: number, at?: Vec): FloatingImage {
+    let w = bitmap.width * cssPerPixel;
+    let h = bitmap.height * cssPerPixel;
+    const fit = Math.min(1, (box.w * 0.9) / w, (box.h * 0.9) / h);
     if (Number.isFinite(fit) && fit > 0) {
       w *= fit;
       h *= fit;
     }
     return new FloatingImage(bitmap, {
-      cx: at?.x ?? viewW / 2,
-      cy: at?.y ?? viewH / 2,
+      cx: at?.x ?? box.x + box.w / 2,
+      cy: at?.y ?? box.y + box.h / 2,
       w,
       h,
       rotation: 0,
@@ -175,6 +182,21 @@ export class FloatingImage {
 
   nudge(dx: number, dy: number): void {
     this.t = { ...this.t, cx: this.t.cx + dx, cy: this.t.cy + dy };
+  }
+
+  /**
+   * 画面上の配置（doc 座標 → CSS px）が変わったときに、キャンバスに対して同じ位置・大きさに留まるよう変換する。
+   * 画像キャンバスでウィンドウの大きさを変えると、画像の表示位置と倍率が変わるため。
+   */
+  remap(from: View, to: View): void {
+    const map = (p: Vec) => viewToCss(to, viewToDoc(from, p));
+    const kx = to.sx / from.sx;
+    const ky = to.sy / from.sy;
+    this.t = mapTransform(this.t, map, kx, ky);
+    if (this.selection) {
+      this.selection.path = mapPath(this.selection.path, map);
+      this.selection.initial = mapTransform(this.selection.initial, map, kx, ky);
+    }
   }
 
   // ------------------------------------------------------------ 描画

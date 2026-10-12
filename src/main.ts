@@ -1,14 +1,15 @@
 import "./styles.css";
-import { Board, tracePath, type Tool } from "./board";
+import { Board, tracePath, type Tool, type Vec } from "./board";
 import {
   copyCanvasToClipboard,
   decodeImage,
   hasFiles,
   imageFromDataTransfer,
   isNativeApp,
+  readClipboardImage,
   readNativeClipboardImage,
 } from "./clipboard";
-import { FloatingImage, strokeMarchingAnts, type DragStart, type Vec } from "./floating";
+import { FloatingImage, strokeMarchingAnts, type DragStart } from "./floating";
 import { PALETTE, SIZE_MAX, SIZE_MIN } from "./palette";
 import { initTitlebar } from "./titlebar";
 
@@ -32,6 +33,7 @@ const undoBtn = $<HTMLButtonElement>("#undo");
 const redoBtn = $<HTMLButtonElement>("#redo");
 const clearBtn = $<HTMLButtonElement>("#clear");
 const copyBtn = $<HTMLButtonElement>("#copy");
+const openBtn = $<HTMLButtonElement>("#open-clipboard");
 const emptyHint = $("#empty-hint");
 const floatHint = $("#float-hint");
 const toastEl = $("#toast");
@@ -39,7 +41,7 @@ const toolButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[da
 
 // ================================================================== 状態
 
-const board = new Board($<HTMLCanvasElement>("#ink"));
+const board = new Board($<HTMLCanvasElement>("#ink"), $<HTMLCanvasElement>("#paper"));
 
 /** ツールバーで選べるツール。lasso は投げ縄選択 */
 type ActiveTool = Tool | "lasso";
@@ -55,8 +57,6 @@ const state = {
 let floating: FloatingImage | null = null;
 /** ブラシカーソル表示用のポインタ位置 */
 let hover: Vec | null = null;
-/** CSS px → 実ピクセルの倍率（Windows の表示スケール 125% なら 1.25） */
-let pixelRatio = window.devicePixelRatio || 1;
 
 type Gesture =
   | { kind: "idle" }
@@ -97,6 +97,7 @@ undoBtn.addEventListener("click", undo);
 redoBtn.addEventListener("click", redo);
 clearBtn.addEventListener("click", clearAll);
 copyBtn.addEventListener("click", () => void copyImage());
+openBtn.addEventListener("click", () => void openClipboardAsPage());
 
 // ボタンをクリックしてもフォーカスを奪わない。
 // （フォーカスが残っていると、画像確定の Enter でそのボタンが再度押されてしまう）
@@ -135,6 +136,8 @@ function updateUi(): void {
   floatHint.hidden = !floating;
   floatHint.dataset.mode = floating?.selection ? "selection" : "image";
   emptyHint.classList.toggle("hidden", !board.isBlank || !!floating);
+  // 画像キャンバスのときは、画像の周りを「机」の色にしてキャンバスの範囲を分かるようにする
+  stage.classList.toggle("has-page", !!board.page);
 
   for (const b of toolButtons) b.setAttribute("aria-pressed", String(b.dataset.tool === state.tool));
   for (const s of swatches) s.setAttribute("aria-pressed", String(s.dataset.color === state.color));
@@ -174,10 +177,12 @@ const resizeObserver = new ResizeObserver(([entry]) => {
   const devW = trusted ? dev.inlineSize : approxW;
   const devH = trusted ? dev.blockSize : approxH;
 
+  // 画像キャンバスは画面に合わせて配置し直されるので、未確定の画像も一緒に動かす
+  const before = board.view;
   board.resize(width, height, devW, devH);
+  floating?.remap(before, board.view);
   overlay.width = Math.max(1, devW);
   overlay.height = Math.max(1, devH);
-  pixelRatio = width > 0 ? devW / width : dpr;
   octx.setTransform(width > 0 ? devW / width : 1, 0, 0, height > 0 ? devH / height : 1, 0, 0);
   requestOverlay();
 });
@@ -296,7 +301,9 @@ overlay.addEventListener("pointerdown", (e) => {
       return;
     }
     const tool: Tool = eraserTip || state.tool === "eraser" ? "eraser" : "pen";
-    board.beginStroke(tool, state.color, state.sizes[tool], p.x, p.y);
+    // 太さは画面上の見た目（CSS px）で指定し、キャンバスの座標に直して渡す
+    const d = board.toDoc(p);
+    board.beginStroke(tool, state.color, board.lengthToDoc(state.sizes[tool]), d.x, d.y);
     gesture = { kind: "draw", pointerId: e.pointerId };
     emptyHint.classList.add("hidden");
   }
@@ -316,7 +323,7 @@ overlay.addEventListener("pointermove", (e) => {
       // 高レートなマウス/ペンの中間点も拾って線を滑らかにする
       const events = e.getCoalescedEvents?.() ?? [];
       for (const ce of events.length ? events : [e]) {
-        const q = localPos(ce, rect);
+        const q = board.toDoc(localPos(ce, rect));
         board.extendStroke(q.x, q.y);
       }
       break;
@@ -389,7 +396,7 @@ async function placeImage(blob: Blob, at?: Vec): Promise<void> {
     board.endStroke();
     gesture = { kind: "idle" };
   }
-  floating = FloatingImage.place(bitmap, board.width, board.height, pixelRatio, at);
+  floating = FloatingImage.place(bitmap, board.docRect, board.cssPerPixel, at);
   updateUi();
 }
 
@@ -402,21 +409,22 @@ async function placeImage(blob: Blob, at?: Vec): Promise<void> {
 function liftSelection(path: number[]): void {
   if (path.length < 6 || Math.abs(polygonArea(path)) < 16) return; // クリックしただけ・細すぎる線は無視
   commitFloating();
-  const region = board.extractRegion(path);
+  const docPath = board.pathToDoc(path);
+  const region = board.extractRegion(docPath);
   if (!region) {
-    toast("囲んだ範囲に何も描かれていません");
+    // 画像キャンバスの下地（貼り付けた元の画像）は紙なので、投げ縄では動かせない
+    toast(board.page ? "囲んだ範囲に書き込みがありません（下地の画像は動かせません）" : "囲んだ範囲に何も描かれていません");
     return;
   }
-  floating = FloatingImage.fromSelection(region.bitmap, region.transform, path);
-  board.setPendingCut(path); // 元の場所は空けておく（確定するまで履歴には入らない）
+  floating = FloatingImage.fromSelection(region.bitmap, board.transformToCss(region.transform), path);
+  board.setPendingCut(docPath); // 元の場所は空けておく（確定するまで履歴には入らない）
   updateUi();
 }
 
 /** Ctrl+A: キャンバス全体を選択 */
 function selectAll(): void {
-  const w = board.width;
-  const h = board.height;
-  liftSelection([0, 0, w, 0, w, h, 0, h]);
+  const { width: w, height: h } = board.docSize;
+  liftSelection(board.pathToCss([0, 0, w, 0, w, h, 0, h]));
 }
 
 /** 符号付き面積（靴ひも公式） */
@@ -438,13 +446,13 @@ function commitFloating(): void {
   floating = null;
   if (gesture.kind === "transform") gesture = { kind: "idle" };
   if (!f.selection) {
-    board.addImage(f.bitmap, f.t);
+    board.addImage(f.bitmap, board.transformToDoc(f.t));
   } else if (f.isUnmoved) {
     // 選択しただけで動かしていなければ、履歴に何も残さず元に戻す
     board.setPendingCut(null);
     f.bitmap.close();
   } else {
-    board.commitSelection(f.selection.path, f.bitmap, f.t);
+    board.commitSelection(board.pathToDoc(f.selection.path), f.bitmap, board.transformToDoc(f.t));
   }
   updateUi();
 }
@@ -469,7 +477,7 @@ function deleteFloating(): void {
   const f = floating;
   floating = null;
   if (gesture.kind === "transform") gesture = { kind: "idle" };
-  board.commitSelection(f.selection!.path, null, null);
+  board.commitSelection(board.pathToDoc(f.selection!.path), null, null);
   f.bitmap.close();
   updateUi();
 }
@@ -559,6 +567,50 @@ stage.addEventListener("drop", (e) => {
   else toast("画像ファイルをドロップしてください");
 });
 
+// ================================================================== クリップボードの画像をキャンバスにする
+
+let openingPage = false;
+
+/**
+ * クリップボードの画像（スクショなど）を、そのままの大きさでキャンバスにする（ボタン / Ctrl+Shift+V）。
+ * 画像は下地になり、その上に描いて Ctrl+C すると画像と同じ大きさでコピーされる。Ctrl+Z で前のキャンバスに戻せる。
+ */
+async function openClipboardAsPage(): Promise<void> {
+  if (openingPage) return;
+  openingPage = true;
+  try {
+    let blob: Blob | null;
+    try {
+      blob = await readClipboardImage();
+    } catch (err) {
+      console.error(err);
+      toast("クリップボードを読み取れませんでした", true);
+      return;
+    }
+    if (!blob) {
+      toast("クリップボードに画像がありません");
+      return;
+    }
+    let bitmap: ImageBitmap;
+    try {
+      bitmap = await decodeImage(blob);
+    } catch (err) {
+      console.error(err);
+      toast("画像を読み込めませんでした", true);
+      return;
+    }
+
+    // 未確定の画像や描きかけの線は確定させてから切り替える（Ctrl+Z で全部戻せるように）
+    commitFloating();
+    if (gesture.kind === "draw" || gesture.kind === "lasso") gesture = { kind: "idle" };
+    const hadContent = !board.isBlank;
+    board.openPage(bitmap);
+    toast(`${bitmap.width} × ${bitmap.height} の画像をキャンバスにしました${hadContent ? "（Ctrl+Z で戻せます）" : ""}`);
+  } finally {
+    openingPage = false;
+  }
+}
+
 // ================================================================== キーボード
 
 /** WebView の既定ショートカット（再読み込み・印刷・検索など）を殺しておく */
@@ -616,6 +668,9 @@ window.addEventListener(
         if (!e.repeat) selectAll();
       } else if (key === "c") {
         if (!e.repeat) void copyImage();
+      } else if (key === "v" && e.shiftKey) {
+        // 既定動作（書式なしで貼り付け = paste イベント）は止めて、画像をキャンバスにする
+        if (!e.repeat) void openClipboardAsPage();
       } else if (key === "v") {
         // paste イベントが来なかったときだけ、少し待ってからネイティブ側で読みに行く
         if (isNativeApp()) {

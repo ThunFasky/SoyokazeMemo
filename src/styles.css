@@ -6,6 +6,7 @@
   color-scheme: light dark;
 
   --canvas-bg: #d9dcd6; /* src/palette.ts の CANVAS_BG と揃えること */
+  --desk-bg: #c3c6c0; /* 画像キャンバスのときの、画像の周り */
 
   --ui-bg: #f5f5f3;
   --titlebar-bg: #ebece8;
@@ -40,6 +41,7 @@
     --accent-fg: #15181c;
     --pill-bg: rgba(20, 21, 24, 0.9);
     --danger: #e08a84;
+    --desk-bg: #17181b;
   }
 }
 
@@ -266,6 +268,26 @@ input:focus-visible {
   transform: translateY(1px);
 }
 
+.secondary-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px 0 9px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--ui-border);
+  white-space: nowrap;
+  transition: background-color 0.12s;
+}
+
+.secondary-btn:hover {
+  background: var(--btn-hover);
+}
+
+.secondary-btn:active {
+  background: var(--btn-active);
+}
+
 /* 太さ */
 .size-group {
   gap: 8px;
@@ -354,6 +376,11 @@ input:focus-visible {
   cursor: crosshair;
 }
 
+/* 画像キャンバス: 画像（paper キャンバス）の周りを机の色にして、どこまでがキャンバスか分かるようにする */
+.stage.has-page {
+  background: var(--desk-bg);
+}
+
 .stage.dragover::after {
   content: "";
   position: absolute;
@@ -372,9 +399,15 @@ input:focus-visible {
   transform: translate(-50%, -50%);
   color: rgba(40, 44, 40, 0.42);
   font-size: 14px;
+  line-height: 2;
+  text-align: center;
   white-space: nowrap;
   pointer-events: none;
   transition: opacity 0.2s;
+}
+
+.empty-hint p {
+  margin: 0;
 }
 
 .empty-hint kbd {
