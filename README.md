@@ -169,8 +169,9 @@ SmartScreen の警告を消したい場合はコード署名が必要です（Az
 │  ├─ tauri.conf.json      ウィンドウ・CSP・インストーラー設定
 │  └─ icons/               アプリアイコン（assets/soyokazeMemoIcon.png から `npm run icons` で生成）
 ├─ assets/
-│  ├─ soyokazeMemoIcon.png アイコンの元データ（50x50 のドット絵。タイトルバー左端にも表示）
+│  ├─ soyokazeMemoIcon.png アイコンの元の絵（SoyokazeMemo で描いたもの。正方形でなくてよい）
+│  ├─ titlebar-icon*.png   タイトルバー左端のアイコン（`npm run icons` で生成。20px と高 DPI 用の 40px）
 │  └─ soyokazeMemoLogo.png タイトルバーのロゴ
-├─ scripts/generate-icons.ps1  アイコン一式の生成（icon.ico などはドットが崩れないよう、サイズごとに整数倍の拡大や等倍の切り出しで作る）
+├─ scripts/generate-icons.ps1  アイコン一式の生成（絵を紙色の角丸タイルに収め、小さいサイズは線を太らせてから縮小）
 └─ docs/DESIGN.md          実装方針
 ```
