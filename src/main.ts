@@ -11,6 +11,7 @@ import {
 } from "./clipboard";
 import { FloatingImage, strokeMarchingAnts, type DragStart } from "./floating";
 import { PALETTE, SIZE_MAX, SIZE_MIN } from "./palette";
+import { captureScreenRegion } from "./screen";
 import { initTitlebar } from "./titlebar";
 
 // ================================================================== DOM
@@ -34,6 +35,7 @@ const redoBtn = $<HTMLButtonElement>("#redo");
 const clearBtn = $<HTMLButtonElement>("#clear");
 const copyBtn = $<HTMLButtonElement>("#copy");
 const openBtn = $<HTMLButtonElement>("#open-clipboard");
+const captureBtn = $<HTMLButtonElement>("#capture-screen");
 const emptyHint = $("#empty-hint");
 const floatHint = $("#float-hint");
 const toastEl = $("#toast");
@@ -98,6 +100,7 @@ redoBtn.addEventListener("click", redo);
 clearBtn.addEventListener("click", clearAll);
 copyBtn.addEventListener("click", () => void copyImage());
 openBtn.addEventListener("click", () => void openClipboardAsPage());
+captureBtn.addEventListener("click", () => void captureScreenAsPage());
 
 // ボタンをクリックしてもフォーカスを奪わない。
 // （フォーカスが残っていると、画像確定の Enter でそのボタンが再度押されてしまう）
@@ -600,14 +603,49 @@ async function openClipboardAsPage(): Promise<void> {
       return;
     }
 
-    // 未確定の画像や描きかけの線は確定させてから切り替える（Ctrl+Z で全部戻せるように）
-    commitFloating();
-    if (gesture.kind === "draw" || gesture.kind === "lasso") gesture = { kind: "idle" };
-    const hadContent = !board.isBlank;
-    board.openPage(bitmap);
-    toast(`${bitmap.width} × ${bitmap.height} の画像をキャンバスにしました${hadContent ? "（Ctrl+Z で戻せます）" : ""}`);
+    openAsPage(bitmap, "画像");
   } finally {
     openingPage = false;
+  }
+}
+
+/** 画像を下地にした新しいキャンバスにする（クリップボードから開く / 画面から取得 で共通） */
+function openAsPage(bitmap: ImageBitmap, what: string): void {
+  // 未確定の画像や描きかけの線は確定させてから切り替える（Ctrl+Z で全部戻せるように）
+  commitFloating();
+  if (gesture.kind === "draw" || gesture.kind === "lasso") gesture = { kind: "idle" };
+  const hadContent = !board.isBlank;
+  board.openPage(bitmap);
+  toast(`${bitmap.width} × ${bitmap.height} の${what}をキャンバスにしました${hadContent ? "（Ctrl+Z で戻せます）" : ""}`);
+}
+
+// ================================================================== 画面から取得
+
+let capturingScreen = false;
+
+/**
+ * ボタンを押した瞬間の画面を静止画にし、そこから四角形で選んだ範囲をキャンバスにする。
+ * 範囲を選ぶ画面は Rust 側が別ウィンドウで出す（capture.html）。Esc でキャンセルしたら何も変えない。
+ */
+async function captureScreenAsPage(): Promise<void> {
+  if (capturingScreen) return;
+  if (!isNativeApp()) {
+    toast("画面からの取得はアプリ版でのみ使えます");
+    return;
+  }
+  capturingScreen = true;
+  try {
+    let bitmap: ImageBitmap | null;
+    try {
+      bitmap = await captureScreenRegion();
+    } catch (err) {
+      console.error(err);
+      toast(typeof err === "string" ? err : "画面を取得できませんでした", true);
+      return;
+    }
+    if (bitmap) openAsPage(bitmap, "範囲");
+  } finally {
+    capturingScreen = false;
   }
 }
 

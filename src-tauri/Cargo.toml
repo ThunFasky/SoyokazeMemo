@@ -1,6 +1,6 @@
 [package]
 name = "soyokaze-memo"
-version = "0.3.0"
+version = "0.4.0"
 description = "一時的な手書きメモ。描いたものはクリップボードにだけ出力する軽量ペイント"
 authors = ["ThunFasky"]
 edition = "2021"
@@ -15,6 +15,17 @@ tauri = { version = "2", features = [] }
 arboard = "3.6"
 # フロントから受け取った PNG をデコード / クリップボードのビットマップを PNG にエンコード
 image = { version = "0.25", default-features = false, features = ["png"] }
+# 「画面から取得」で範囲選択の結果を待つ / 自分のウィンドウを隠してから撮るまで待つ
+tokio = { version = "1", features = ["sync", "time"] }
+
+[target.'cfg(windows)'.dependencies]
+# 「画面から取得」: GDI で画面全体を撮る / ウィンドウの表示アニメーションを止める
+windows-sys = { version = "0.60", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_WindowsAndMessaging",
+] }
 
 [profile.release]
 codegen-units = 1

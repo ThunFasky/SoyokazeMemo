@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "capture",
+  "description": "「画面から取得」の範囲選択画面（capture.html）に与える権限。使うのは自前のコマンドだけ",
+  "windows": ["capture"],
+  "permissions": ["core:default"]
+}

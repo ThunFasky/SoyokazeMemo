@@ -81,7 +81,18 @@
 
       <div class="spacer"></div>
 
-      <button class="secondary-btn" id="open-clipboard" title="クリップボードの画像（スクショなど）をそのままキャンバスにする (Ctrl+Shift+V)">
+      <button class="secondary-btn" id="capture-screen" aria-label="画面から取得" title="画面の一部を四角形で囲んで撮り、そのままキャンバスにする（ボタンを押した瞬間の画面から選びます。Esc でキャンセル）">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 8.5V5.5A1.5 1.5 0 0 1 5.5 4h3" />
+          <path d="M15.5 4h3A1.5 1.5 0 0 1 20 5.5v3" />
+          <path d="M20 15.5v3a1.5 1.5 0 0 1-1.5 1.5h-3" />
+          <path d="M8.5 20h-3A1.5 1.5 0 0 1 4 18.5v-3" />
+          <path d="M12 8.5v7M8.5 12h7" />
+        </svg>
+        <span>画面から取得</span>
+      </button>
+
+      <button class="secondary-btn" id="open-clipboard" aria-label="クリップボードから開く" title="クリップボードの画像（スクショなど）をそのままキャンバスにする (Ctrl+Shift+V)">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="7" y="3" width="7" height="3.5" rx="1" />
           <path d="M14 4.8h1.5A1.5 1.5 0 0 1 17 6.3V9" />

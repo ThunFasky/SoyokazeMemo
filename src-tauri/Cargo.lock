@@ -3001,12 +3001,14 @@ dependencies = [
 
 [[package]]
 name = "soyokaze-memo"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "arboard",
  "image",
  "tauri",
  "tauri-build",
+ "tokio",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>画面から取得</title>
+  </head>
+  <body>
+    <!-- 「画面から取得」の範囲選択画面。全モニターを覆う枠なしウィンドウに、ボタンを押した瞬間の静止画を敷く -->
+    <!-- shot: 暗くした静止画 / selection: 選んでいる範囲（元の明るさ）と枠 -->
+    <canvas id="shot"></canvas>
+    <canvas id="selection"></canvas>
+    <div class="capture-hint" id="hint">
+      ドラッグで範囲を選択（<kbd>Shift</kbd> で正方形） ／ <kbd>Esc</kbd> でキャンセル
+    </div>
+    <script type="module" src="/src/capture.ts"></script>
+  </body>
+</html>
