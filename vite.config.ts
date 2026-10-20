@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 // Tauri CLI から起動されたときに渡される開発用ホスト（モバイル向け）。デスクトップでは未設定。
@@ -22,5 +23,12 @@ export default defineConfig({
     target: "chrome110",
     minify: !process.env.TAURI_ENV_DEBUG,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rolldownOptions: {
+      // capture.html は「画面から取得」の範囲選択画面（Rust 側が別ウィンドウで開く）
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        capture: fileURLToPath(new URL("./capture.html", import.meta.url)),
+      },
+    },
   },
 });

@@ -288,6 +288,19 @@ input:focus-visible {
   background: var(--btn-active);
 }
 
+/* 幅が足りないときは、文字付きのボタンをアイコンだけにしてツールバーを 1 行に収める（説明はツールチップに出る） */
+@media (max-width: 1159px) {
+  .secondary-btn {
+    justify-content: center;
+    width: 34px;
+    padding: 0;
+  }
+
+  .secondary-btn span {
+    display: none;
+  }
+}
+
 /* 太さ */
 .size-group {
   gap: 8px;
