@@ -11,6 +11,7 @@ import {
 } from "./clipboard";
 import { FloatingImage, strokeMarchingAnts, type DragStart } from "./floating";
 import { PALETTE, SIZE_MAX, SIZE_MIN } from "./palette";
+import { applyPlatform, isMac, MOD } from "./platform";
 import { captureScreenRegion } from "./screen";
 import { initTitlebar } from "./titlebar";
 
@@ -504,7 +505,7 @@ function redo(): void {
 function clearAll(): void {
   commitFloating(); // 確定してから消すので、Ctrl+Z で画像ごと戻せる
   board.clear();
-  toast("すべて消去しました（Ctrl+Z で戻せます）");
+  toast(`すべて消去しました（${MOD}+Z で戻せます）`);
 }
 
 // ================================================================== クリップボード出力
@@ -616,7 +617,7 @@ function openAsPage(bitmap: ImageBitmap, what: string): void {
   if (gesture.kind === "draw" || gesture.kind === "lasso") gesture = { kind: "idle" };
   const hadContent = !board.isBlank;
   board.openPage(bitmap);
-  toast(`${bitmap.width} × ${bitmap.height} の${what}をキャンバスにしました${hadContent ? "（Ctrl+Z で戻せます）" : ""}`);
+  toast(`${bitmap.width} × ${bitmap.height} の${what}をキャンバスにしました${hadContent ? `（${MOD}+Z で戻せます）` : ""}`);
 }
 
 // ================================================================== 画面から取得
@@ -629,8 +630,8 @@ let capturingScreen = false;
  */
 async function captureScreenAsPage(): Promise<void> {
   if (capturingScreen) return;
-  if (!isNativeApp()) {
-    toast("画面からの取得はアプリ版でのみ使えます");
+  if (!isNativeApp() || isMac) {
+    toast(isMac ? "画面からの取得は今のところ Windows 版でのみ使えます" : "画面からの取得はアプリ版でのみ使えます");
     return;
   }
   capturingScreen = true;
@@ -653,6 +654,11 @@ async function captureScreenAsPage(): Promise<void> {
 
 /** WebView の既定ショートカット（再読み込み・印刷・検索など）を殺しておく */
 const BLOCKED_CTRL_KEYS = new Set(["a", "d", "f", "g", "h", "j", "k", "l", "n", "o", "p", "r", "s", "t", "u", "w", "=", "+", "-", "0"]);
+if (isMac) {
+  // Mac では ⌘W（ウィンドウを閉じる）と ⌘H（隠す）はメニューの標準操作なので止めない
+  BLOCKED_CTRL_KEYS.delete("w");
+  BLOCKED_CTRL_KEYS.delete("h");
+}
 const BLOCKED_KEYS = new Set(["F3", "F5", "F7", "BrowserBack", "BrowserForward", "BrowserRefresh"]);
 
 window.addEventListener(
@@ -780,6 +786,7 @@ stage.addEventListener("animationend", () => stage.classList.remove("flash"));
 
 // ================================================================== 起動
 
+applyPlatform();
 initTitlebar($("#titlebar"));
 updateUi();
 

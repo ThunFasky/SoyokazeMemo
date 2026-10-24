@@ -1,0 +1,56 @@
+# macOS 用のアプリ（.dmg）をビルドして Artifacts に置く。
+# Intel Mac / Apple シリコン（M1〜）のどちらでも動くユニバーサル版。
+# 配布用の正式版は release.yml（リリースを Publish すると GitHub Releases に添付）を使う。
+name: macOS app
+
+on:
+  push:
+    # タグの push では動かさない（リリース用のビルドは release.yml が担当）
+    branches: ["**"]
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "assets/**"
+      - "index.html"
+      - "capture.html"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "vite.config.ts"
+      - ".github/workflows/macos-app.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+
+      # tauri.macos.conf.json が自動で重なる（.app と .dmg、アドホック署名）
+      - run: npm run tauri build -- --target universal-apple-darwin
+
+      - name: Upload app (.dmg)
+        uses: actions/upload-artifact@v7
+        with:
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          archive: false
+          if-no-files-found: error

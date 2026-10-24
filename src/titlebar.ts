@@ -1,11 +1,13 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isNativeApp } from "./clipboard";
+import { isMac } from "./platform";
 
 /**
  * 自前のタイトルバー（tauri.conf.json で decorations: false にしている）。
  * ドラッグでの移動とダブルクリックでの最大化は data-tauri-drag-region に任せ、
  * ここでは右端の 最小化 / 最大化 / 閉じる ボタンと、非アクティブ時の表示だけを扱う。
  * ブラウザで開いたとき（npm run dev）はウィンドウを操作できないのでボタンを出さない。
+ * Mac（tauri.macos.conf.json）は OS のタイトルバーを透明にして重ねているので、左上に OS の信号機ボタンが出る。
  */
 export function initTitlebar(titlebar: HTMLElement): void {
   // ボタンを押してもフォーカスを奪わない（ツールバーと同じく、Enter で再度押されるのを防ぐ）
@@ -13,7 +15,8 @@ export function initTitlebar(titlebar: HTMLElement): void {
     if ((e.target as Element).closest("button")) e.preventDefault();
   });
 
-  if (!isNativeApp()) return;
+  // Mac は OS の信号機ボタン（titleBarStyle: Overlay）をそのまま使うので、自前のボタンは出さない
+  if (!isNativeApp() || isMac) return;
 
   const win = getCurrentWindow();
   const button = (name: string) => titlebar.querySelector<HTMLButtonElement>(`[data-window="${name}"]`)!;

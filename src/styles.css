@@ -22,8 +22,9 @@
   --pill-fg: #f3f3f0;
   --danger: #b5524c;
 
-  font-family: "Segoe UI Variable Text", "Segoe UI", "Yu Gothic UI", "Meiryo UI", system-ui,
-    sans-serif;
+  /* Windows: Segoe UI + 游ゴシック UI / Mac: システムフォント（SF Pro + ヒラギノ角ゴ） */
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Yu Gothic UI", "Meiryo UI", -apple-system,
+    BlinkMacSystemFont, "Hiragino Sans", system-ui, sans-serif;
   font-size: 13px;
 }
 
@@ -129,6 +130,16 @@ kbd {
 }
 
 .window-controls[hidden] {
+  display: none;
+}
+
+/* Mac のアプリでは、左上に OS の信号機ボタン（閉じる・しまう・フルスクリーン）が重なるので、その分空ける */
+[data-platform="mac"][data-native="true"] .titlebar {
+  padding-left: 78px;
+}
+
+/* 「画面から取得」は今のところ Windows 版だけ */
+[data-platform="mac"] #capture-screen {
   display: none;
 }
 
