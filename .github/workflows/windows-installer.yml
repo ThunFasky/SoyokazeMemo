@@ -12,6 +12,7 @@ on:
       - "src-tauri/**"
       - "assets/**"
       - "index.html"
+      - "capture.html"
       - "package.json"
       - "package-lock.json"
       - "tsconfig.json"

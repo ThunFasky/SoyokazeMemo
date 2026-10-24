@@ -1,4 +1,7 @@
-# GitHub Releases にインストーラー（-setup.exe / .msi）を添付する。
+# GitHub Releases にインストーラーを添付する。
+#   - Windows: -setup.exe / .msi
+#   - macOS:   .dmg（Intel / Apple シリコン両対応のユニバーサル版）
+# Windows と macOS は並行してビルドし、片方が失敗してももう片方は添付される。
 #
 # 動くタイミング
 #   - Releases 画面で "Draft a new release" → Publish したとき（タグ名は自由: v0.1.0, Beta など）
@@ -29,7 +32,17 @@ env:
 
 jobs:
   release:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            build-args: ""
+            files: src-tauri/target/release/bundle/nsis/*-setup.exe src-tauri/target/release/bundle/msi/*.msi
+          - os: macos-latest
+            build-args: --target universal-apple-darwin
+            files: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,6 +64,9 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          # macOS のユニバーサル版は Intel / Apple シリコンの両方をビルドする（Windows では使わない）
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -58,16 +74,17 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run tauri build
+      - run: npm run tauri build -- ${{ matrix.build-args }}
 
       - name: Attach installers to the GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          FILES: ${{ matrix.files }}
         run: |
-          files=(src-tauri/target/release/bundle/nsis/*-setup.exe src-tauri/target/release/bundle/msi/*.msi)
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" "${files[@]}" --clobber
-          else
-            gh release create "$TAG" "${files[@]}" --title "SoyokazeMemo ${TAG}" --generate-notes
+          files=($FILES)
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            # Windows と macOS が同時に作ろうとすることがあるので、作れなくても（もうあれば）そのまま進む
+            gh release create "$TAG" --title "SoyokazeMemo ${TAG}" --generate-notes || gh release view "$TAG" > /dev/null
           fi
+          gh release upload "$TAG" "${files[@]}" --clobber

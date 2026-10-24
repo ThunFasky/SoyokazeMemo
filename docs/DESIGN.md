@@ -299,7 +299,54 @@ main.ts  captureScreenAsPage()
 - どの終わり方でも、最後に範囲選択のウィンドウを閉じてメインウィンドウを戻してから結果を返します。
 - 同時に 2 回は動かしません（2 回目は「すでに画面の取得中です」）。
 
-## 9. アプリアイコンの生成（`npm run icons`）
+## 9. macOS 対応
+
+Tauri は Mac でもそのまま動くので、違いは「設定の重ね書き」と「見た目・キー操作の差」だけにしています。
+
+### 設定（`src-tauri/tauri.macos.conf.json`）
+
+Tauri は Mac でビルドするとき、`tauri.conf.json` に `tauri.macos.conf.json` を JSON Merge Patch で重ねます（配列は丸ごと置き換え）。
+
+- **ウィンドウ**: Windows は `decorations: false` で自前のタイトルバーを描いていますが、Mac で同じことをすると信号機ボタン（閉じる・しまう・フルスクリーン）が消えてしまいます。
+  Mac では `decorations: true` + `titleBarStyle: "Overlay"` + `hiddenTitle: true` にして、OS のタイトルバーを透明にして WebView の上に重ねます。
+  自前のタイトルバー（ロゴとドラッグ領域）はそのまま使い、左側を信号機ボタンの分（78px）だけ空けます。
+- **バンドル**: `targets: ["app", "dmg"]`。`minimumSystemVersion` は 12.0。
+- **署名**: `signingIdentity: "-"`（アドホック署名）。Apple シリコンの Mac は署名のないアプリを起動できず、
+  署名が壊れていると「壊れているため開けません」になるので、最低限アドホック署名はしておきます。
+  公証（Notarization）はしていないので、初回は「このまま開く」の操作が必要です（README 参照）。
+
+### 画面とキー操作（`src/platform.ts`）
+
+- WKWebView の UA（`Macintosh`）で Mac を判定し、`<html data-platform="mac">` を付けて CSS を切り替えます。
+  信号機ボタンの余白は、アプリ版のときだけ（`data-native="true"`）空けます。
+- キー操作はもともと `ctrlKey || metaKey` で受けているので、`⌘+Z` などはそのまま動きます。
+  表示だけ、ツールチップ・`<kbd>`・トーストの `Ctrl` を `⌘` に書き換えます。
+- WebView の既定ショートカットを止めるリストから、Mac では `⌘+W`（ウィンドウを閉じる）と `⌘+H`（隠す）を外しています。
+  Mac ではメニューの標準操作なので、止めると不便です。WKWebView はキー操作をまずページに渡し、ページが止めなかったものだけメニューに回します。
+- 「画面から取得」は Windows の GDI で撮っているので、Mac ではボタンを出しません。
+  Mac で同じ「押した瞬間の静止画から選ぶ」をやるには、ScreenCaptureKit での撮影、画面収録の許可（TCC）の扱い、ディスプレイごとの範囲選択ウィンドウが必要になるので、別に作ります。
+
+### WebKit との違い
+
+Mac の WebView は Chromium ではなく WebKit（Safari と同じエンジン）です。今のコードで差が出るところは、どれも最初から代わりの処理を用意してあります。
+
+| 機能 | WebKit | 対応 |
+| --- | --- | --- |
+| `ResizeObserver` の `device-pixel-content-box` | 非対応（例外になる） | 例外を捕まえて通常の `observe` にし、`CSS px × devicePixelRatio` で実ピクセルを求める |
+| `PointerEvent.getCoalescedEvents()` | 古い Safari は非対応 | `?.()` で、無ければその 1 点だけ使う |
+| `OffscreenCanvas` の 2D | Safari 16.4 以降 | macOS / Safari を最新にしてもらう（README） |
+
+Mac 対応のときに、WebKitGTK（Linux 版の WebKit）の MiniBrowser を WebDriver で動かして、
+描画・Undo・貼り付けと変形・投げ縄・PNG 書き出し・画像キャンバスが WebKit でも JS エラーなく動くことを確かめました（このテストはリポジトリには入れていません）。
+
+### ビルドと配布
+
+- **macOS app** ワークフロー（push ごと）と **Release** ワークフローの macOS ジョブで、`macos-latest` 上で
+  `npm run tauri build -- --target universal-apple-darwin` を実行し、Intel / Apple シリコン両対応の `.dmg` を作ります。
+- Release は Windows と macOS を matrix で並行してビルドします（`fail-fast: false` なので片方が失敗しても、もう片方は添付されます）。
+  2 つのジョブが同時にリリースを作ろうとすることがあるので、作るのに失敗してもリリースがあればそのまま添付に進みます。
+
+## 10. アプリアイコンの生成（`npm run icons`）
 
 元の絵 `assets/soyokazeMemoIcon.png` は SoyokazeMemo で描いた手描きの絵（紙のグレーにスレートブルー 1 色）で、正方形ではありません。
 `scripts/generate-icons.ps1` が、ここから各サイズのアイコンを直接描きます。
