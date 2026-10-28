@@ -300,7 +300,7 @@ input:focus-visible {
 }
 
 /* 幅が足りないときは、文字付きのボタンをアイコンだけにしてツールバーを 1 行に収める（説明はツールチップに出る） */
-@media (max-width: 1159px) {
+@media (max-width: 1199px) {
   .secondary-btn {
     justify-content: center;
     width: 34px;
@@ -471,6 +471,32 @@ input:focus-visible {
 
 .float-hint kbd {
   background: rgba(255, 255, 255, 0.16);
+}
+
+/* 表示倍率（拡大・縮小しているときだけ出す。押すと元に戻る） */
+.zoom-badge {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  min-width: 52px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--pill-bg);
+  color: var(--pill-fg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  transition: opacity 0.12s;
+}
+
+.zoom-badge:hover {
+  opacity: 1;
+}
+
+.zoom-badge[hidden] {
+  display: none;
 }
 
 .toast {
