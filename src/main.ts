@@ -1,4 +1,5 @@
 import "./styles.css";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Board, tracePath, type Tool, type Vec } from "./board";
 import {
   copyCanvasToClipboard,
@@ -40,14 +41,20 @@ const captureBtn = $<HTMLButtonElement>("#capture-screen");
 const emptyHint = $("#empty-hint");
 const floatHint = $("#float-hint");
 const toastEl = $("#toast");
+const zoomBadge = $<HTMLButtonElement>("#zoom-badge");
 const toolButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-tool]"));
 
 // ================================================================== 状態
 
 const board = new Board($<HTMLCanvasElement>("#ink"), $<HTMLCanvasElement>("#paper"));
 
-/** ツールバーで選べるツール。lasso は投げ縄選択 */
-type ActiveTool = Tool | "lasso";
+/** ツールバーで選べるツール。lasso は投げ縄選択、fill はバケツ（塗りつぶし） */
+type ActiveTool = Tool | "lasso" | "fill";
+
+/** 太さのあるツール（ペン・消しゴム）か */
+function isBrush(tool: ActiveTool): tool is Tool {
+  return tool === "pen" || tool === "eraser";
+}
 
 const state = {
   tool: "pen" as ActiveTool,
@@ -60,6 +67,8 @@ const state = {
 let floating: FloatingImage | null = null;
 /** ブラシカーソル表示用のポインタ位置 */
 let hover: Vec | null = null;
+/** Space を押している間は、ドラッグで表示を動かす */
+let spaceHeld = false;
 
 type Gesture =
   | { kind: "idle" }
@@ -67,7 +76,9 @@ type Gesture =
   | { kind: "transform"; pointerId: number; drag: DragStart; last: Vec }
   /** 投げ縄で範囲をなぞっている途中 */
   | { kind: "lasso"; pointerId: number; points: number[] }
-  /** 未確定画像の外側クリック（＝確定）。そのクリックでは線を引かない */
+  /** 表示を動かしている途中（中ボタン / Space + ドラッグ） */
+  | { kind: "pan"; pointerId: number; last: Vec }
+  /** 未確定画像の外側クリック（＝確定）やバケツのクリック。そのクリックでは線を引かない */
   | { kind: "swallow"; pointerId: number };
 
 let gesture: Gesture = { kind: "idle" };
@@ -121,13 +132,13 @@ function setColor(color: string): void {
 }
 
 function setSize(size: number): void {
-  if (state.tool === "lasso") return;
+  if (!isBrush(state.tool)) return;
   state.sizes[state.tool] = Math.round(Math.min(SIZE_MAX, Math.max(SIZE_MIN, size)));
   updateUi();
 }
 
 function stepSize(dir: 1 | -1): void {
-  if (state.tool === "lasso") return;
+  if (!isBrush(state.tool)) return;
   const s = state.sizes[state.tool];
   const step = s < 10 ? 1 : s < 30 ? 2 : 5;
   setSize(s + dir * step);
@@ -146,22 +157,31 @@ function updateUi(): void {
   for (const b of toolButtons) b.setAttribute("aria-pressed", String(b.dataset.tool === state.tool));
   for (const s of swatches) s.setAttribute("aria-pressed", String(s.dataset.color === state.color));
 
-  // 投げ縄のときは太さが関係ないのでスライダーを無効にする
-  const lasso = state.tool === "lasso";
-  const size = lasso ? state.sizes.pen : state.sizes[state.tool as Tool];
-  sizeInput.disabled = lasso;
+  // 投げ縄とバケツは太さが関係ないのでスライダーを無効にする
+  const brush = isBrush(state.tool);
+  const size = isBrush(state.tool) ? state.sizes[state.tool] : state.sizes.pen;
+  sizeInput.disabled = !brush;
   sizeInput.value = String(size);
-  sizeValue.textContent = lasso ? "–" : String(size);
+  sizeValue.textContent = brush ? String(size) : "–";
   const dot = Math.max(3, Math.min(size, 24));
   sizeDot.style.width = sizeDot.style.height = `${dot}px`;
   sizeDot.style.background = state.color;
   sizeDot.classList.toggle("eraser", state.tool === "eraser");
-  sizeDot.classList.toggle("lasso", lasso);
+  sizeDot.classList.toggle("lasso", !brush);
 
-  if (gesture.kind === "idle") {
-    overlay.style.cursor = floating ? floating.cursorFor(hover && floating.hitTest(hover)) : "crosshair";
-  }
+  // 表示倍率（最初の倍率のときは出さない。押すと元に戻る）
+  zoomBadge.hidden = board.isHomeZoom;
+  zoomBadge.textContent = `${Math.round(board.zoom * 100)}%`;
+
+  updateCursor();
   requestOverlay();
+}
+
+function updateCursor(): void {
+  if (gesture.kind === "pan") overlay.style.cursor = "grabbing";
+  else if (gesture.kind !== "idle") return;
+  else if (spaceHeld) overlay.style.cursor = "grab";
+  else overlay.style.cursor = floating ? floating.cursorFor(hover && floating.hitTest(hover)) : "crosshair";
 }
 
 board.onChange = updateUi;
@@ -181,15 +201,130 @@ const resizeObserver = new ResizeObserver(([entry]) => {
   const devW = trusted ? dev.inlineSize : approxW;
   const devH = trusted ? dev.blockSize : approxH;
 
-  // 画像キャンバスは画面に合わせて配置し直されるので、未確定の画像も一緒に動かす
+  // ウィンドウの左辺や上辺をつかんでサイズを変えると、ステージの左上が画面上で動く。
+  // その分だけ表示を逆にずらして、描いたものが画面上で止まって見えるようにする（右辺・下辺なら動かない）
+  const sizeChanged = width !== stageSize.w || height !== stageSize.h;
+  stageSize = { w: width, h: height };
+  const pos = stageScreenPos();
+  const shift = anchor && sizeChanged ? { x: pos.x - anchor.x, y: pos.y - anchor.y } : { x: 0, y: 0 };
+  anchor = pos;
+  if (sizeChanged) followResize();
+
   const before = board.view;
-  board.resize(width, height, devW, devH);
+  board.resize(width, height, devW, devH, shift);
   floating?.remap(before, board.view);
   overlay.width = Math.max(1, devW);
   overlay.height = Math.max(1, devH);
   octx.setTransform(width > 0 ? devW / width : 1, 0, 0, height > 0 ? devH / height : 1, 0, 0);
-  requestOverlay();
+  updateUi();
 });
+
+let stageSize = { w: 0, h: 0 };
+/** 最後に表示の位置を合わせたときの、ステージ左上の画面上の位置（CSS px） */
+let anchor: Vec | null = null;
+/** この時刻までに起きたステージの移動は、サイズ変更によるものとして扱う */
+let resizeUntil = 0;
+
+function stageScreenPos(): Vec {
+  const r = stage.getBoundingClientRect();
+  return { x: window.screenX + r.left, y: window.screenY + r.top };
+}
+
+/**
+ * ステージの画面上の位置を確かめる。サイズ変更の直後に位置が変わっていたら（ウィンドウの位置の通知が
+ * サイズより遅れて届いたとき）表示をずらして合わせる。それ以外（ウィンドウを動かしただけ）は位置を覚え直すだけ。
+ */
+function syncAnchor(): void {
+  const pos = stageScreenPos();
+  if (!anchor) {
+    anchor = pos;
+    return;
+  }
+  const dx = pos.x - anchor.x;
+  const dy = pos.y - anchor.y;
+  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+  anchor = pos;
+  if (performance.now() <= resizeUntil) changeView(() => board.panBy(-dx, -dy));
+}
+
+/** サイズ変更のあと少しの間、位置の変化を追いかける */
+function followResize(): void {
+  const running = performance.now() <= resizeUntil;
+  resizeUntil = performance.now() + 200;
+  if (running) return;
+  const tick = () => {
+    syncAnchor();
+    if (performance.now() <= resizeUntil) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// ウィンドウを動かしただけのときは、位置を覚え直すだけ（次のサイズ変更でずれないように）
+let lastPointerSync = 0;
+document.addEventListener("pointermove", () => {
+  const now = performance.now();
+  if (now - lastPointerSync < 200) return;
+  lastPointerSync = now;
+  syncAnchor();
+});
+window.addEventListener("focus", syncAnchor);
+if (isNativeApp()) void getCurrentWindow().onMoved(() => syncAnchor());
+
+// ================================================================== 表示の拡大・縮小・移動
+
+/** 表示を変える。未確定の画像も画面上で一緒に動かす */
+function changeView(update: () => void): void {
+  const before = board.view;
+  update();
+  floating?.remap(before, board.view);
+  updateUi();
+}
+
+/** Ctrl+= / Ctrl+- 1 回分の倍率 */
+const ZOOM_STEP = 1.25;
+let viewQueued = false;
+let pendingZoom: { p: Vec; factor: number } | null = null;
+const pendingPan = { x: 0, y: 0 };
+
+/** ホイールなどの細かい入力は 1 フレームにまとめてから描き直す */
+function queueZoom(p: Vec, factor: number): void {
+  pendingZoom = pendingZoom ? { p, factor: pendingZoom.factor * factor } : { p, factor };
+  scheduleView();
+}
+
+function queuePan(dx: number, dy: number): void {
+  pendingPan.x += dx;
+  pendingPan.y += dy;
+  scheduleView();
+}
+
+function scheduleView(): void {
+  if (viewQueued) return;
+  viewQueued = true;
+  requestAnimationFrame(() => {
+    viewQueued = false;
+    const zoom = pendingZoom;
+    const { x, y } = pendingPan;
+    pendingZoom = null;
+    pendingPan.x = pendingPan.y = 0;
+    changeView(() => {
+      board.panBy(x, y);
+      if (zoom) board.zoomAt(zoom.p, zoom.factor);
+    });
+  });
+}
+
+/** キーボードで拡大・縮小するときは、ステージの中央を中心にする */
+function zoomStage(factor: number): void {
+  const r = stage.getBoundingClientRect();
+  queueZoom({ x: r.width / 2, y: r.height / 2 }, factor);
+}
+
+function resetView(): void {
+  changeView(() => board.resetView());
+}
+
+zoomBadge.addEventListener("click", resetView);
 
 function observeStage(): void {
   resizeObserver.disconnect();
@@ -239,7 +374,7 @@ function renderOverlay(): void {
     floating.draw(octx, now);
   } else if (gesture.kind === "lasso") {
     drawLassoInProgress(gesture.points, now);
-  } else if (hover && state.tool !== "lasso") {
+  } else if (hover && isBrush(state.tool) && !spaceHeld) {
     drawBrushCursor(hover, state.sizes[state.tool]);
   }
 }
@@ -282,6 +417,15 @@ overlay.addEventListener("pointerdown", (e) => {
   if (gesture.kind !== "idle") return;
   const p = localPos(e);
 
+  // 中ボタン、または Space を押しながらのドラッグで表示を動かす
+  if (e.button === 1 || (spaceHeld && e.button === 0)) {
+    gesture = { kind: "pan", pointerId: e.pointerId, last: p };
+    updateCursor();
+    overlay.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    return;
+  }
+
   if (floating) {
     if (e.button !== 0) return;
     const handle = floating.hitTest(p);
@@ -302,6 +446,14 @@ overlay.addEventListener("pointerdown", (e) => {
       overlay.setPointerCapture(e.pointerId);
       e.preventDefault();
       requestOverlay();
+      return;
+    }
+    if (state.tool === "fill" && !eraserTip) {
+      // バケツ: クリックした所と同じ色でつながっている範囲を塗る（ドラッグしても 1 回だけ）
+      if (!board.fill(board.toDoc(p), state.color)) toast("ここは塗れません（キャンバスの外か、もう同じ色です）");
+      gesture = { kind: "swallow", pointerId: e.pointerId };
+      overlay.setPointerCapture(e.pointerId);
+      e.preventDefault();
       return;
     }
     const tool: Tool = eraserTip || state.tool === "eraser" ? "eraser" : "pen";
@@ -347,6 +499,11 @@ overlay.addEventListener("pointermove", (e) => {
       gesture.last = p;
       floating.dragTo(gesture.drag, p, { shift: e.shiftKey });
       break;
+    case "pan":
+      if (e.pointerId !== gesture.pointerId) break;
+      queuePan(p.x - gesture.last.x, p.y - gesture.last.y);
+      gesture.last = p;
+      break;
     case "idle":
       if (floating) overlay.style.cursor = floating.cursorFor(floating.hitTest(p));
       break;
@@ -371,17 +528,55 @@ overlay.addEventListener("pointerleave", () => {
   requestOverlay();
 });
 
-// ホイールで未確定画像を拡大縮小
+// ホイール:
+//   Ctrl（Mac は ⌘ も）+ ホイール → カーソルの位置を中心に拡大・縮小（タッチパッドのピンチもこれで来る）
+//   未確定の画像があるとき → その画像を拡大縮小
+//   それ以外 → 表示を上下に動かす（Shift で左右。タッチパッドの 2 本指スクロールは上下左右）
 overlay.addEventListener(
   "wheel",
   (e) => {
-    if (!floating || gesture.kind === "transform") return;
     e.preventDefault();
-    floating.scaleBy(Math.exp(-e.deltaY * 0.0015));
-    requestOverlay();
+    if (gesture.kind !== "idle" && gesture.kind !== "pan") return;
+    // 行・ページ単位で来たときは px に直す
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage.clientHeight : 1;
+    const dx = e.deltaX * unit;
+    const dy = e.deltaY * unit;
+    if (e.ctrlKey || e.metaKey) {
+      queueZoom(localPos(e), Math.exp(-dy * 0.002));
+    } else if (floating) {
+      floating.scaleBy(Math.exp(-dy * 0.0015));
+      requestOverlay();
+    } else if (e.shiftKey && !dx) {
+      queuePan(-dy, 0);
+    } else {
+      queuePan(-dx, -dy);
+    }
   },
   { passive: false },
 );
+
+// 中ボタンを押したときのブラウザの自動スクロール（Windows）は出さない（中ボタンのドラッグは表示の移動に使う）
+overlay.addEventListener("mousedown", (e) => {
+  if (e.button === 1) e.preventDefault();
+});
+
+// Mac（WebKit）のタッチパッドのピンチは wheel ではなく gesture イベントで来る
+interface WebKitGestureEvent extends UIEvent {
+  scale: number;
+  clientX: number;
+  clientY: number;
+}
+let gestureScale = 1;
+overlay.addEventListener("gesturestart", (e) => {
+  e.preventDefault();
+  gestureScale = 1;
+});
+overlay.addEventListener("gesturechange", (e) => {
+  e.preventDefault();
+  const g = e as WebKitGestureEvent;
+  queueZoom(localPos(g), g.scale / gestureScale);
+  gestureScale = g.scale;
+});
 
 // ================================================================== 未確定画像
 
@@ -425,10 +620,10 @@ function liftSelection(path: number[]): void {
   updateUi();
 }
 
-/** Ctrl+A: キャンバス全体を選択 */
+/** Ctrl+A: キャンバス全体（書き出される範囲）を選択 */
 function selectAll(): void {
-  const { width: w, height: h } = board.docSize;
-  liftSelection(board.pathToCss([0, 0, w, 0, w, h, 0, h]));
+  const { x, y, w, h } = board.docRect;
+  liftSelection([x, y, x + w, y, x + w, y + h, x, y + h]);
 }
 
 /** 符号付き面積（靴ひも公式） */
@@ -675,6 +870,17 @@ window.addEventListener(
       return;
     }
 
+    // Space を押している間は、ドラッグで表示を動かせる（押しっぱなしの繰り返しも止める）
+    if (key === " " && !ctrl && !e.altKey) {
+      e.preventDefault();
+      if (!spaceHeld) {
+        spaceHeld = true;
+        updateCursor();
+        requestOverlay();
+      }
+      return;
+    }
+
     // --- 未確定画像の操作 ---
     if (floating && !ctrl && !e.altKey) {
       const nudge = e.shiftKey ? 10 : 1;
@@ -710,6 +916,13 @@ window.addEventListener(
         redo();
       } else if (key === "a") {
         if (!e.repeat) selectAll();
+      } else if (key === "0") {
+        resetView();
+      } else if (key === "=" || key === "+" || key === ";") {
+        // 拡大（JIS 配列では + が Shift+; なので ; も受け付ける）
+        zoomStage(ZOOM_STEP);
+      } else if (key === "-") {
+        zoomStage(1 / ZOOM_STEP);
       } else if (key === "c") {
         if (!e.repeat) void copyImage();
       } else if (key === "v" && e.shiftKey) {
@@ -744,13 +957,24 @@ window.addEventListener("keyup", (e) => {
     floating.dragTo(gesture.drag, gesture.last, { shift: false });
     requestOverlay();
   }
+  if (e.key === " ") {
+    spaceHeld = false;
+    updateCursor();
+    requestOverlay();
+  }
+});
+// ほかのウィンドウに切り替えている間に Space を離しても、押しっぱなし扱いにならないように
+window.addEventListener("blur", () => {
+  spaceHeld = false;
+  updateCursor();
 });
 
-/** P / E / L / [ / ] / 1〜8 */
+/** P / E / L / G / [ / ] / 1〜8 */
 function handleToolKeys(e: KeyboardEvent, key: string): void {
   if (key === "p" || key === "b") setTool("pen");
   else if (key === "e") setTool("eraser");
   else if (key === "l") setTool("lasso");
+  else if (key === "g") setTool("fill");
   else if (key === "[") stepSize(-1);
   else if (key === "]") stepSize(1);
   else if (/^[1-9]$/.test(key) && Number(key) <= PALETTE.length) setColor(PALETTE[Number(key) - 1].value);

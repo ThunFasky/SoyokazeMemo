@@ -43,6 +43,15 @@
           </svg>
           <span class="sr-only">投げ縄選択</span>
         </button>
+        <button class="icon-btn" data-tool="fill" aria-pressed="false" title="バケツ (G) ― クリックした所と同じ色でつながっている範囲を今の色で塗る">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 12.2l7-7 7 7-5.6 5.6a2 2 0 0 1-2.8 0z" />
+            <path d="M4 12.2h14" />
+            <path d="M8.6 7.6L6.2 5.2" />
+            <path d="M20.3 15.2s1.7 2.1 1.7 3.3a1.7 1.7 0 0 1-3.4 0c0-1.2 1.7-3.3 1.7-3.3z" />
+          </svg>
+          <span class="sr-only">バケツ</span>
+        </button>
       </div>
 
       <div class="group size-group" title="太さ ( [ / ] )">
@@ -133,6 +142,8 @@
         <span data-only="selection"><kbd>Esc</kbd> で元に戻す</span>
         <span data-only="selection"><kbd>Delete</kbd> で削除</span>
       </div>
+
+      <button class="zoom-badge" id="zoom-badge" hidden title="表示倍率。クリックで元に戻す (Ctrl+0)">100%</button>
 
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
     </main>
